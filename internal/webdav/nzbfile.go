@@ -16,29 +16,30 @@ type NzbFile struct {
 
 func NewNzbFile(name string, flag int, perm os.FileMode) (*NzbFile, error) {
 	var metadata *domain.NZB
-	var errMetadata error
+	var err error
+	var file *os.File
 
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		metadata, errMetadata = domain.LoadNZBFileMetadata(name)
+		metadata, err = domain.LoadNZBFileMetadata(name)
+	}()
+
+	go func() {
+		defer wg.Done()
+		file, err = os.OpenFile(name, flag, perm)
 	}()
 
 	wg.Wait()
 
-	if errMetadata != nil {
-		return nil, errMetadata
+	if err != nil {
+		return nil, err
 	}
 
 	originalName := metadata.Head.GetMetaByType(domain.FileName)
 	extension := path.Ext(originalName)
-
-	file, err := os.OpenFile(name, flag, perm)
-	if err != nil {
-		return nil, err
-	}
 
 	return &NzbFile{
 		File: file,

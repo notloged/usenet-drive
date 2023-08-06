@@ -20,31 +20,26 @@ type nzbFileInfoWithMetadata struct {
 func NewFileInfoWithMetadata(name string) (fs.FileInfo, error) {
 	var nzbFileInfo os.FileInfo
 	var metadata *domain.NZB
-	var errMetadata error
-	var errFile error
+	var err error
 
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		metadata, errMetadata = domain.LoadNZBFileMetadata(name)
+		metadata, err = domain.LoadNZBFileMetadata(name)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		nzbFileInfo, errFile = os.Stat(name)
+		nzbFileInfo, err = os.Stat(name)
 	}()
 
 	wg.Wait()
 
-	if errMetadata != nil {
-		return nil, errMetadata
-	}
-
-	if errFile != nil {
-		return nil, errFile
+	if err != nil {
+		return nil, err
 	}
 
 	fileName := nzbFileInfo.Name()
