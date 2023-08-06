@@ -8,13 +8,12 @@ import (
 type MetaTypes string
 
 const (
-	FileSize    MetaTypes = "file_size"
-	FileName    MetaTypes = "file_name"
-	Password    MetaTypes = "password"
-	Blocks      MetaTypes = "blocks"
-	IOBlock     MetaTypes = "io_block"
-	NZBName     MetaTypes = "nzb_name"
-	ContentType MetaTypes = "content-type"
+	FileSize MetaTypes = "file_size"
+	FileName MetaTypes = "file_name"
+	Password MetaTypes = "password"
+	Blocks   MetaTypes = "blocks"
+	IOBlock  MetaTypes = "io_block"
+	NZBName  MetaTypes = "nzb_name"
 )
 
 type NZB struct {
