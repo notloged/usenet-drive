@@ -10,7 +10,7 @@ import (
 
 func StartServer(config domain.Config) (*http.Server, error) {
 	handler := &webdav.Handler{
-		FileSystem: webdav.Dir(config.NzbPath),
+		FileSystem: nzbFilesystem(config.NzbPath),
 		LockSystem: webdav.NewMemLS(),
 	}
 
