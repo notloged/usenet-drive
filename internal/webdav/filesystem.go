@@ -24,13 +24,13 @@ func (fs nzbFilesystem) OpenFile(ctx context.Context, name string, flag int, per
 	}
 
 	if isNzbFile(name) {
-		// If the file doesn't have the .nzb extension, use a normal os.Stat() call
+		// If file is a nzb file return a custom file that will mask the nzb
 		return NewNzbFile(name, flag, perm)
 	}
 
 	originalName := getOriginalNzb(name)
 	if originalName != nil {
-		// If the file is a masked call the orginal nzb file
+		// If the file is a masked call the original nzb file
 		return NewNzbFile(*originalName, flag, perm)
 	}
 
@@ -73,13 +73,13 @@ func (fs nzbFilesystem) Stat(ctx context.Context, name string) (os.FileInfo, err
 	}
 
 	if isNzbFile(name) {
-		// If the file doesn't have the .nzb extension, use a normal os.Stat() call
+		// If file is a nzb file return a custom file that will mask the nzb
 		return NewFileInfoWithMetadata(name)
 	}
 
 	originalName := getOriginalNzb(name)
 	if originalName != nil {
-		// If the file is a masked call the orginal nzb file
+		// If the file is a masked call the original nzb file
 		return NewFileInfoWithMetadata(*originalName)
 	}
 
