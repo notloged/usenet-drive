@@ -27,6 +27,7 @@ func NewNzbFile(name string, flag int, perm os.FileMode) (*NzbFile, error) {
 		metadata, err = domain.LoadNZBFileMetadata(name)
 	}()
 
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		file, err = os.OpenFile(name, flag, perm)
