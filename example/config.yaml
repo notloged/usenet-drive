@@ -1,2 +1,8 @@
 nzb_path: /Users/javi/mio/usenet-drive/example/nzbs
 server_port: 8080
+usenet:
+  host: news.usenetserver.com
+  port: 563
+  username: javier
+  password: mypassword
+  ssl: true

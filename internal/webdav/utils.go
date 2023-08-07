@@ -32,3 +32,7 @@ func getOriginalNzb(name string) *string {
 
 	return &originalName
 }
+
+func isMetadataFile(name string) bool {
+	return strings.HasSuffix(name, ".metadata.json")
+}

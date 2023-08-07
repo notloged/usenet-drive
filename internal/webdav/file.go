@@ -56,6 +56,7 @@ func (f *customFile) Readdir(n int) ([]os.FileInfo, error) {
 	for i, info := range infos {
 		if isNzbFile(info.Name()) {
 			info := info
+			i := i
 			merr.Go(func() error {
 				infos[i], err = NewFileInfoWithMetadata(filepath.Join(f.folderName, info.Name()))
 				if err != nil {
@@ -71,7 +72,14 @@ func (f *customFile) Readdir(n int) ([]os.FileInfo, error) {
 		return nil, err
 	}
 
-	return infos, nil
+	finalInfo := make([]os.FileInfo, 0)
+	for i, info := range infos {
+		if !isMetadataFile(info.Name()) {
+			finalInfo = append(finalInfo, infos[i])
+		}
+	}
+
+	return finalInfo, nil
 }
 
 func (f *customFile) Readdirnames(n int) ([]string, error) {

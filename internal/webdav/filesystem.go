@@ -69,6 +69,7 @@ func (fs nzbFilesystem) Rename(ctx context.Context, oldName, newName string) err
 
 func (fs nzbFilesystem) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	if name = fs.resolve(name); name == "" {
+		// Filter metadata files
 		return nil, os.ErrNotExist
 	}
 

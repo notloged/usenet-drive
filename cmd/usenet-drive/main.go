@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-yaml/yaml"
 	"github.com/javi11/usenet-drive/internal/domain"
+	"github.com/javi11/usenet-drive/internal/usenet"
 	"github.com/javi11/usenet-drive/internal/webdav"
 	"github.com/spf13/cobra"
 )
@@ -30,8 +31,21 @@ var rootCmd = &cobra.Command{
 			log.Fatalf("Failed to parse config file: %v", err)
 		}
 
+		// Connect to the Usenet server
+		uClient, err := usenet.NewClient(
+			usenet.WithHost(config.Usenet.Host),
+			usenet.WithPort(config.Usenet.Port),
+			usenet.WithUsername(config.Usenet.Username),
+			usenet.WithPassword(config.Usenet.Password),
+			usenet.WithGroup(config.Usenet.Group),
+			usenet.WithSSL(config.Usenet.SSL),
+		)
+		if err != nil {
+			log.Fatalf("Failed to connect to Usenet: %v", err)
+		}
+
 		// Call the handler function with the config
-		srv, err := webdav.StartServer(config)
+		srv, err := webdav.StartServer(config, uClient)
 		if err != nil {
 			log.Fatalf("Failed to handle config: %v", err)
 		}

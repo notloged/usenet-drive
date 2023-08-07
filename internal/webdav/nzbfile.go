@@ -2,7 +2,6 @@ package webdav
 
 import (
 	"os"
-	"path"
 	"sync"
 	"time"
 
@@ -15,7 +14,7 @@ type NzbFile struct {
 }
 
 func NewNzbFile(name string, flag int, perm os.FileMode) (*NzbFile, error) {
-	var metadata *domain.NZB
+	var metadata domain.Metadata
 	var err error
 	var file *os.File
 
@@ -24,7 +23,7 @@ func NewNzbFile(name string, flag int, perm os.FileMode) (*NzbFile, error) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		metadata, err = domain.LoadNZBFileMetadata(name)
+		metadata, err = domain.LoadMetadata(name)
 	}()
 
 	wg.Add(1)
@@ -39,12 +38,9 @@ func NewNzbFile(name string, flag int, perm os.FileMode) (*NzbFile, error) {
 		return nil, err
 	}
 
-	originalName := metadata.Head.GetMetaByType(domain.FileName)
-	extension := path.Ext(originalName)
-
 	return &NzbFile{
 		File: file,
-		name: replaceFileExtension(name, extension),
+		name: replaceFileExtension(name, metadata.FileExtension),
 	}, nil
 }
 

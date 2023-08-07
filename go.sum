@@ -1,3 +1,5 @@
+github.com/chrisfarms/nntp v0.0.0-20150609164919-115924d5d016 h1:o6qB4G3SzjqfZ1lRGHPOh94bnE1oLYCVV9f1ZFUmbcU=
+github.com/chrisfarms/nntp v0.0.0-20150609164919-115924d5d016/go.mod h1:Z3r6rL8QPSGmmT+XZsiX4ftPMmZ8ZVkuwJ/6b6lE/6M=
 github.com/cpuguy83/go-md2man/v2 v2.0.2/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/go-yaml/yaml v2.1.0+incompatible h1:RYi2hDdss1u4YE7GwixGzWwVo47T8UQwnTLB6vQiq+o=
 github.com/go-yaml/yaml v2.1.0+incompatible/go.mod h1:w2MrLa16VYP0jy6N7M5kHaCkaLENm+P+Tv+MfurjSw0=
