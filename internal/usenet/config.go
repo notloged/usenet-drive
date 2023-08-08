@@ -1,22 +1,30 @@
 package usenet
 
-import "crypto/tls"
+import (
+	"crypto/tls"
+	"fmt"
+)
 
 type Config struct {
-	Host      string
-	Port      int
-	Username  string
-	Password  string
-	Group     string
-	SSL       bool
-	TLSConfig *tls.Config
+	Host           string
+	Port           int
+	Username       string
+	Password       string
+	Group          string
+	TLS            bool
+	TLSConfig      *tls.Config
+	MaxConnections int
+}
+
+func (c *Config) getConnectionString() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
 
 type Option func(*Config)
 
 func defaultConfig() *Config {
 	return &Config{
-		SSL: false,
+		TLS: false,
 	}
 }
 
@@ -50,14 +58,20 @@ func WithGroup(group string) Option {
 	}
 }
 
-func WithSSL(ssl bool) Option {
+func WithTLS(tls bool) Option {
 	return func(c *Config) {
-		c.SSL = ssl
+		c.TLS = tls
 	}
 }
 
 func WithTLSConfig(tlsConfig *tls.Config) Option {
 	return func(c *Config) {
 		c.TLSConfig = tlsConfig
+	}
+}
+
+func WithMaxConnections(maxConnections int) Option {
+	return func(c *Config) {
+		c.MaxConnections = maxConnections
 	}
 }

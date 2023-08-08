@@ -9,6 +9,8 @@ require (
 
 require (
 	github.com/chrisfarms/nntp v0.0.0-20150609164919-115924d5d016 // indirect
+	github.com/chrisfarms/nzb v0.0.0-20151202172059-f7cdf7f0e051 // indirect
+	github.com/chrisfarms/yenc v0.0.0-20140520125709-00bca2f8b3cb // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

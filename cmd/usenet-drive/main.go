@@ -32,20 +32,21 @@ var rootCmd = &cobra.Command{
 		}
 
 		// Connect to the Usenet server
-		uClient, err := usenet.NewClient(
+		uConnPool := usenet.NewConnectionPool(
 			usenet.WithHost(config.Usenet.Host),
 			usenet.WithPort(config.Usenet.Port),
 			usenet.WithUsername(config.Usenet.Username),
 			usenet.WithPassword(config.Usenet.Password),
 			usenet.WithGroup(config.Usenet.Group),
-			usenet.WithSSL(config.Usenet.SSL),
+			usenet.WithTLS(config.Usenet.SSL),
+			usenet.WithMaxConnections(config.Usenet.MaxConnections),
 		)
 		if err != nil {
 			log.Fatalf("Failed to connect to Usenet: %v", err)
 		}
 
 		// Call the handler function with the config
-		srv, err := webdav.StartServer(config, uClient)
+		srv, err := webdav.StartServer(config, uConnPool)
 		if err != nil {
 			log.Fatalf("Failed to handle config: %v", err)
 		}

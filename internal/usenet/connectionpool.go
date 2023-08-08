@@ -7,103 +7,128 @@
 package usenet
 
 import (
+	"log"
 	"net"
 	"sync"
 
-	"github.com/matthiassb/go-usenet/nntp"
+	"github.com/chrisfarms/nntp"
 )
 
-var (
-	connMu  sync.Mutex
-	connNum int
-	connCh  = make(chan *nntp.Conn, maxNumConn)
-)
+type connectionPool struct {
+	mu               sync.Mutex
+	connectionsTaken int
+	ch               chan *nntp.Conn
+	maxConnections   int
+	config           *Config
+}
 
-const maxNumConn = 20
+type connectionError struct {
+	c   *nntp.Conn
+	err error
+}
 
-func getConn() (*nntp.Conn, error) {
+func NewConnectionPool(options ...Option) *connectionPool {
+	config := defaultConfig()
+	for _, option := range options {
+		option(config)
+	}
+
+	return &connectionPool{
+		ch:             make(chan *nntp.Conn, 20),
+		maxConnections: config.MaxConnections,
+		config:         config,
+	}
+}
+
+func (p *connectionPool) GetConnection() (*nntp.Conn, error) {
 	// check if there's a free conn we can get
 	select {
-	case c := <-connCh:
+	case c := <-p.ch:
 		return c, nil
 	default:
 	}
-	connMu.Lock()
-	if connNum == maxNumConn {
-		connMu.Unlock()
+	p.mu.Lock()
+	if p.connectionsTaken == p.maxConnections {
+		p.mu.Unlock()
 		// wait for idle conn
-		select {
-		case c := <-connCh:
-			return c, nil
-		}
+		c := <-p.ch
+		return c, nil
 	}
-	connNum++
-	connMu.Unlock()
-	type connerr struct {
-		c   *nntp.Conn
-		err error
-	}
-	ch := make(chan connerr)
-	cancelch := make(chan struct{})
+	p.connectionsTaken++
+	p.mu.Unlock()
+	ch := make(chan connectionError)
+	cancelCh := make(chan struct{})
 
 	// dial with this connection.
 	// if we manage to get a connection from
-	// a client  done with theirs, we will use that one
+	// a client done with theirs, we will use that one
 	// and put the idle conn
 	go func() {
-		c, err := dialNNTP()
+		c, err := p.dialNNTP()
 		select {
-		case <-cancelch:
+		case <-cancelCh:
 			if err == nil {
-				putConn(c)
+				p.freeConnection(c)
 				return
 			}
 			// ignore error
-			connMu.Lock()
-			connNum--
-			connMu.Unlock()
-		case ch <- connerr{c, err}:
+			p.mu.Lock()
+			p.connectionsTaken--
+			p.mu.Unlock()
+		case ch <- connectionError{c, err}:
 		}
 	}()
 	select {
 	case ce := <-ch:
 		return ce.c, ce.err
-	case c := <-connCh:
-		close(cancelch)
+	case c := <-p.ch:
+		close(cancelCh)
 		return c, nil
 	}
 }
 
-func putConn(c *nntp.Conn) {
-	connCh <- c
+func (p *connectionPool) CloseConnection(c *nntp.Conn) error {
+	err := c.Quit()
+	if err != nil {
+		return err
+	}
+	p.mu.Lock()
+	p.connectionsTaken--
+	p.mu.Unlock()
+
+	return nil
 }
 
-func putBroken(c *nntp.Conn) {
-	c.Close()
-	connMu.Lock()
-	connNum--
-	connMu.Unlock()
+func (p *connectionPool) freeConnection(c *nntp.Conn) {
+	p.ch <- c
 }
 
-func dialNNTP() (*nntp.Conn, error) {
-	dialstr := Config.GetAddressStr()
+func (p *connectionPool) dialNNTP() (*nntp.Conn, error) {
+	dialStr := p.config.getConnectionString()
 	var err error
 	var c *nntp.Conn
 
 	for {
-		if Config.TLS {
-			c, err = nntp.DialTLS(dialstr, Config.Username, Config.Password)
+		if p.config.TLS {
+			c, err = nntp.DialTLS("tcp", dialStr, p.config.TLSConfig)
 		} else {
-			c, err = nntp.Dial(dialstr, Config.Username, Config.Password)
+			c, err = nntp.Dial("tcp", dialStr)
 		}
 		if err != nil {
 			// if it's a timeout, ignore and try again
 			e, ok := err.(net.Error)
-			if ok && e.Temporary() {
+			if ok && e.Timeout() {
+				log.Default().Printf("timeout connecting to %s, retrying", dialStr)
 				continue
 			}
 			return nil, err
 		}
+
+		// auth
+		if err := c.Authenticate(p.config.Username, p.config.Password); err != nil {
+			return nil, err
+		}
+
 		break
 	}
 	return c, nil

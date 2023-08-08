@@ -8,7 +8,7 @@ import (
 	"golang.org/x/net/webdav"
 )
 
-func StartServer(config domain.Config, _uc UsenetClient) (*http.Server, error) {
+func StartServer(config domain.Config, _uc UsenetConnectionPool) (*http.Server, error) {
 	handler := &webdav.Handler{
 		FileSystem: nzbFilesystem(config.NzbPath),
 		LockSystem: webdav.NewMemLS(),
