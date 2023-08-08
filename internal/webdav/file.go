@@ -111,17 +111,29 @@ func (f *customFile) Sync() error {
 }
 
 func (f *customFile) Truncate(size int64) error {
+	if isNzbFile(f.Name()) {
+		return os.ErrPermission
+	}
 	return f.File.Truncate(size)
 }
 
 func (f *customFile) Write(b []byte) (int, error) {
+	if isNzbFile(f.Name()) {
+		return 0, os.ErrPermission
+	}
 	return f.File.Write(b)
 }
 
 func (f *customFile) WriteAt(b []byte, off int64) (int, error) {
+	if isNzbFile(f.Name()) {
+		return 0, os.ErrPermission
+	}
 	return f.File.WriteAt(b, off)
 }
 
 func (f *customFile) WriteString(s string) (int, error) {
+	if isNzbFile(f.Name()) {
+		return 0, os.ErrPermission
+	}
 	return f.File.WriteString(s)
 }
