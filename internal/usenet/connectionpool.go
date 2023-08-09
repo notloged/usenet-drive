@@ -68,7 +68,7 @@ func (p *connectionPool) GetConnection() (*nntp.Conn, error) {
 		select {
 		case <-cancelCh:
 			if err == nil {
-				p.freeConnection(c)
+				p.FreeConnection(c)
 				return
 			}
 			// ignore error
@@ -99,7 +99,7 @@ func (p *connectionPool) CloseConnection(c *nntp.Conn) error {
 	return nil
 }
 
-func (p *connectionPool) freeConnection(c *nntp.Conn) {
+func (p *connectionPool) FreeConnection(c *nntp.Conn) {
 	p.ch <- c
 }
 

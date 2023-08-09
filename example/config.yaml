@@ -1,8 +1,9 @@
 nzb_path: /Users/javi/mio/usenet-drive/example/nzbs
 server_port: 8080
 usenet:
-  host: news.usenetserver.com
-  port: 563
-  username: javier
-  password: mypassword
+  host: news.newsgroup.ninja
+  port: 80
+  username: laris11
+  password: 7abdJ!PhuXyFxz7
   ssl: true
+  max_connections: 30

@@ -9,7 +9,18 @@ import (
 	"golang.org/x/net/webdav"
 )
 
-type nzbFilesystem string
+// pasar el filesystem a la funcion
+type nzbFilesystem struct {
+	root string
+	cn   UsenetConnectionPool
+}
+
+func NewNzbFilesystem(root string, cn UsenetConnectionPool) webdav.FileSystem {
+	return nzbFilesystem{
+		root: root,
+		cn:   cn,
+	}
+}
 
 func (fs nzbFilesystem) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
 	if name = fs.resolve(name); name == "" {
@@ -25,13 +36,13 @@ func (fs nzbFilesystem) OpenFile(ctx context.Context, name string, flag int, per
 
 	if isNzbFile(name) {
 		// If file is a nzb file return a custom file that will mask the nzb
-		return NewNzbFile(name, flag, perm)
+		return NewNzbFile(name, flag, perm, fs.cn)
 	}
 
 	originalName := getOriginalNzb(name)
 	if originalName != nil {
 		// If the file is a masked call the original nzb file
-		return NewNzbFile(*originalName, flag, perm)
+		return NewNzbFile(*originalName, flag, perm, fs.cn)
 	}
 
 	f, err := os.OpenFile(name, flag, perm)
@@ -46,7 +57,7 @@ func (fs nzbFilesystem) RemoveAll(ctx context.Context, name string) error {
 	if name = fs.resolve(name); name == "" {
 		return os.ErrNotExist
 	}
-	if name == filepath.Clean(string(fs)) {
+	if name == filepath.Clean(fs.root) {
 		// Prohibit removing the virtual root directory.
 		return os.ErrInvalid
 	}
@@ -60,7 +71,7 @@ func (fs nzbFilesystem) Rename(ctx context.Context, oldName, newName string) err
 	if newName = fs.resolve(newName); newName == "" {
 		return os.ErrNotExist
 	}
-	if root := filepath.Clean(string(fs)); root == oldName || root == newName {
+	if root := filepath.Clean(fs.root); root == oldName || root == newName {
 		// Prohibit renaming from or to the virtual root directory.
 		return os.ErrInvalid
 	}
@@ -94,7 +105,7 @@ func (fs nzbFilesystem) resolve(name string) string {
 		strings.Contains(name, "\x00") {
 		return ""
 	}
-	dir := string(fs)
+	dir := fs.root
 	if dir == "" {
 		dir = "."
 	}

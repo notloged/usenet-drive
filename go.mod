@@ -13,6 +13,7 @@ require (
 	github.com/chrisfarms/yenc v0.0.0-20140520125709-00bca2f8b3cb // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/hraban/lrucache v0.0.0-20201130153820-17052bf09781 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/cobra v1.7.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
