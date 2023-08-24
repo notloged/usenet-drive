@@ -3,6 +3,7 @@ package webdav
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -11,6 +12,7 @@ import (
 type customFile struct {
 	*os.File
 	folderName string
+	mutex      *sync.RWMutex
 }
 
 func (f *customFile) Chdir() error {
@@ -38,14 +40,20 @@ func (f *customFile) Name() string {
 }
 
 func (f *customFile) Read(b []byte) (int, error) {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
 	return f.File.Read(b)
 }
 
 func (f *customFile) ReadAt(b []byte, off int64) (int, error) {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
 	return f.File.ReadAt(b, off)
 }
 
 func (f *customFile) Readdir(n int) ([]os.FileInfo, error) {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
 	infos, err := f.File.Readdir(n)
 	if err != nil {
 		return nil, err
@@ -83,10 +91,14 @@ func (f *customFile) Readdir(n int) ([]os.FileInfo, error) {
 }
 
 func (f *customFile) Readdirnames(n int) ([]string, error) {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
 	return f.File.Readdirnames(n)
 }
 
 func (f *customFile) Seek(offset int64, whence int) (int64, error) {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
 	return f.File.Seek(offset, whence)
 }
 
@@ -103,6 +115,8 @@ func (f *customFile) SetWriteDeadline(t time.Time) error {
 }
 
 func (f *customFile) Stat() (os.FileInfo, error) {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
 	return f.File.Stat()
 }
 
@@ -118,6 +132,8 @@ func (f *customFile) Truncate(size int64) error {
 }
 
 func (f *customFile) Write(b []byte) (int, error) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 	if isNzbFile(f.Name()) {
 		return 0, os.ErrPermission
 	}
@@ -125,6 +141,8 @@ func (f *customFile) Write(b []byte) (int, error) {
 }
 
 func (f *customFile) WriteAt(b []byte, off int64) (int, error) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 	if isNzbFile(f.Name()) {
 		return 0, os.ErrPermission
 	}
@@ -132,6 +150,8 @@ func (f *customFile) WriteAt(b []byte, off int64) (int, error) {
 }
 
 func (f *customFile) WriteString(s string) (int, error) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 	if isNzbFile(f.Name()) {
 		return 0, os.ErrPermission
 	}

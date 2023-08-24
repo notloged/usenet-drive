@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/webdav"
 )
@@ -13,16 +14,20 @@ import (
 type nzbFilesystem struct {
 	root string
 	cn   UsenetConnectionPool
+	lock *sync.RWMutex
 }
 
 func NewNzbFilesystem(root string, cn UsenetConnectionPool) webdav.FileSystem {
 	return nzbFilesystem{
 		root: root,
 		cn:   cn,
+		lock: &sync.RWMutex{},
 	}
 }
 
 func (fs nzbFilesystem) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
+	fs.lock.Lock()
+	defer fs.lock.Unlock()
 	if name = fs.resolve(name); name == "" {
 		return os.ErrNotExist
 	}
@@ -30,19 +35,21 @@ func (fs nzbFilesystem) Mkdir(ctx context.Context, name string, perm os.FileMode
 }
 
 func (fs nzbFilesystem) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
+	fs.lock.Lock()
+	defer fs.lock.Unlock()
 	if name = fs.resolve(name); name == "" {
 		return nil, os.ErrNotExist
 	}
 
 	if isNzbFile(name) {
 		// If file is a nzb file return a custom file that will mask the nzb
-		return NewNzbFile(name, flag, perm, fs.cn)
+		return NewNzbFile(name, flag, perm, fs.cn, fs.lock)
 	}
 
 	originalName := getOriginalNzb(name)
 	if originalName != nil {
 		// If the file is a masked call the original nzb file
-		return NewNzbFile(*originalName, flag, perm, fs.cn)
+		return NewNzbFile(*originalName, flag, perm, fs.cn, fs.lock)
 	}
 
 	f, err := os.OpenFile(name, flag, perm)
@@ -50,10 +57,12 @@ func (fs nzbFilesystem) OpenFile(ctx context.Context, name string, flag int, per
 		return nil, err
 	}
 
-	return &customFile{File: f, folderName: name}, nil
+	return &customFile{File: f, folderName: name, mutex: fs.lock}, nil
 }
 
 func (fs nzbFilesystem) RemoveAll(ctx context.Context, name string) error {
+	fs.lock.Lock()
+	defer fs.lock.Unlock()
 	if name = fs.resolve(name); name == "" {
 		return os.ErrNotExist
 	}
@@ -65,6 +74,8 @@ func (fs nzbFilesystem) RemoveAll(ctx context.Context, name string) error {
 }
 
 func (fs nzbFilesystem) Rename(ctx context.Context, oldName, newName string) error {
+	fs.lock.Lock()
+	defer fs.lock.Unlock()
 	if oldName = fs.resolve(oldName); oldName == "" {
 		return os.ErrNotExist
 	}
@@ -79,6 +90,8 @@ func (fs nzbFilesystem) Rename(ctx context.Context, oldName, newName string) err
 }
 
 func (fs nzbFilesystem) Stat(ctx context.Context, name string) (os.FileInfo, error) {
+	fs.lock.RLock()
+	defer fs.lock.RUnlock()
 	if name = fs.resolve(name); name == "" {
 		// Filter metadata files
 		return nil, os.ErrNotExist

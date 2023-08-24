@@ -34,7 +34,7 @@ func NewConnectionPool(options ...Option) *connectionPool {
 	}
 
 	return &connectionPool{
-		ch:             make(chan *nntp.Conn, 20),
+		ch:             make(chan *nntp.Conn, config.MaxConnections),
 		maxConnections: config.MaxConnections,
 		config:         config,
 	}

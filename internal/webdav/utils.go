@@ -5,6 +5,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/exp/constraints"
 )
 
 func slashClean(name string) string {
@@ -35,4 +37,11 @@ func getOriginalNzb(name string) *string {
 
 func isMetadataFile(name string) bool {
 	return strings.HasSuffix(name, ".metadata.json")
+}
+
+func Max[T constraints.Ordered](a, b T) T {
+	if a > b {
+		return a
+	}
+	return b
 }
