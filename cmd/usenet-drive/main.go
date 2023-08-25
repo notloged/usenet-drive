@@ -32,7 +32,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		// Connect to the Usenet server
-		uConnPool := usenet.NewConnectionPool(
+		uConnPool, err := usenet.NewConnectionPool(
 			usenet.WithHost(config.Usenet.Host),
 			usenet.WithPort(config.Usenet.Port),
 			usenet.WithUsername(config.Usenet.Username),

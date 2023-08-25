@@ -6,8 +6,11 @@ import (
 	"time"
 
 	"github.com/chrisfarms/nzb"
+	"github.com/hraban/lrucache"
 	"github.com/javi11/usenet-drive/internal/domain"
 )
+
+var nzbParserCache = lrucache.New(100)
 
 type NzbFile struct {
 	name   string
@@ -36,13 +39,22 @@ func NewNzbFile(name string, flag int, perm os.FileMode, cp UsenetConnectionPool
 	}()
 
 	wg.Wait()
-
 	if err != nil {
 		return nil, err
 	}
-	nzbFile, err := nzb.New(file)
-	if err != nil {
-		return nil, err
+
+	var nzbFile *nzb.Nzb
+
+	// Cache nzb file parser since it should never change and is expensive to parse
+	hit, _ := nzbParserCache.Get(name)
+	if f, ok := hit.(*nzb.Nzb); ok {
+		nzbFile = f
+	} else {
+		nzbFile, err = nzb.New(file)
+		if err != nil {
+			return nil, err
+		}
+		nzbParserCache.Set(name, nzbFile)
 	}
 
 	return &NzbFile{

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"sync"
 
@@ -29,7 +28,7 @@ type Buf struct {
 	ptr     int64
 	cache   *lrucache.Cache
 	cp      UsenetConnectionPool
-	mx      sync.Mutex
+	mx      sync.RWMutex
 }
 
 // NewBuffer creates a new data volume based on a buffer
@@ -39,6 +38,7 @@ func NewBuffer(nzbFile *nzb.NzbFile, size int, cp UsenetConnectionPool) *Buf {
 		nzbFile: nzbFile,
 		cache:   lrucache.New(int64(len(nzbFile.Segments))),
 		cp:      cp,
+		mx:      sync.RWMutex{},
 	}
 }
 
@@ -96,7 +96,6 @@ func (v *Buf) Read(p []byte) (int, error) {
 		if n >= len(p) {
 			break
 		}
-		log.Default().Printf("Downloading segment %v, bytes read %v", segment.Id, v.ptr)
 		chunk, err := v.downloadSegment(segment, v.nzbFile.Groups)
 		if err != nil {
 			break
@@ -125,17 +124,16 @@ func (v *Buf) ReadAt(p []byte, off int64) (int, error) {
 	}
 
 	currentSegment := int(float64(off) / float64(v.nzbFile.Segments[0].Bytes))
-	beginReadAt := Max((int(off)-(currentSegment*v.nzbFile.Segments[0].Bytes))-1, 0)
+	beginReadAt := Max((int(off) - (currentSegment * v.nzbFile.Segments[0].Bytes)), 0)
 	for _, segment := range v.nzbFile.Segments[currentSegment:] {
 		if n >= len(p) {
 			break
 		}
-		log.Default().Printf("Downloading segment %v, bytes read %v", segment.Id, v.ptr)
 		chunk, err := v.downloadSegment(segment, v.nzbFile.Groups)
 		if err != nil {
 			break
 		}
-		beginWriteAt := Max(n-1, 0)
+		beginWriteAt := n
 		n += copy(p[beginWriteAt:], chunk.Body[beginReadAt:])
 		beginReadAt = 0
 	}
@@ -144,38 +142,37 @@ func (v *Buf) ReadAt(p []byte, off int64) (int, error) {
 }
 
 func (v *Buf) downloadSegment(segment nzb.NzbSegment, groups []string) (*yenc.Part, error) {
-	v.mx.Lock()
+	v.mx.RLock()
 	hit, _ := v.cache.Get(segment.Id)
-	v.mx.Unlock()
+	v.mx.RUnlock()
 	var chunk *yenc.Part
 	if c, ok := hit.(*yenc.Part); ok {
 		chunk = c
-		log.Default().Printf("Cache hit for segment %v", segment.Id)
 	} else {
 		// Get the connection from the pool
-		conn, err := v.cp.GetConnection()
-		defer v.cp.FreeConnection(conn)
+		conn, err := v.cp.Get()
+		defer v.cp.Free(conn)
 		if err != nil {
-			v.cp.CloseConnection(conn)
+			v.cp.Close(conn)
 			fmt.Fprintln(os.Stderr, "nntp error:", err)
 			return nil, err
 		}
 		err = usenet.FindGroup(conn, groups)
 		if err != nil {
-			v.cp.CloseConnection(conn)
+			v.cp.Close(conn)
 			fmt.Fprintln(os.Stderr, "nntp error:", err)
 			return nil, err
 		}
 
 		body, err := conn.Body(fmt.Sprintf("<%v>", segment.Id))
 		if err != nil {
-			v.cp.CloseConnection(conn)
+			v.cp.Close(conn)
 			fmt.Fprintln(os.Stderr, "nntp error:", err)
 			return nil, err
 		}
-
 		yread, err := yenc.Decode(body)
 		if err != nil {
+			v.cp.Close(conn)
 			fmt.Fprintln(os.Stderr, err)
 			return nil, err
 		}

@@ -35,8 +35,8 @@ func (fs nzbFilesystem) Mkdir(ctx context.Context, name string, perm os.FileMode
 }
 
 func (fs nzbFilesystem) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
+	fs.lock.RLock()
+	defer fs.lock.RUnlock()
 	if name = fs.resolve(name); name == "" {
 		return nil, os.ErrNotExist
 	}

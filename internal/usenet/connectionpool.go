@@ -9,108 +9,72 @@ package usenet
 import (
 	"log"
 	"net"
-	"sync"
+	"time"
 
 	"github.com/chrisfarms/nntp"
+	"github.com/silenceper/pool"
 )
 
 type connectionPool struct {
-	mu               sync.Mutex
-	connectionsTaken int
-	ch               chan *nntp.Conn
-	maxConnections   int
-	config           *Config
+	pool pool.Pool
 }
 
-type connectionError struct {
-	c   *nntp.Conn
-	err error
-}
-
-func NewConnectionPool(options ...Option) *connectionPool {
+func NewConnectionPool(options ...Option) (*connectionPool, error) {
 	config := defaultConfig()
 	for _, option := range options {
 		option(config)
 	}
 
-	return &connectionPool{
-		ch:             make(chan *nntp.Conn, config.MaxConnections),
-		maxConnections: config.MaxConnections,
-		config:         config,
-	}
-}
+	//factory Specify the method to create the connection
+	factory := func() (interface{}, error) { return dialNNTP(config) }
 
-func (p *connectionPool) GetConnection() (*nntp.Conn, error) {
-	// check if there's a free conn we can get
-	select {
-	case c := <-p.ch:
-		return c, nil
-	default:
-	}
-	p.mu.Lock()
-	if p.connectionsTaken == p.maxConnections {
-		p.mu.Unlock()
-		// wait for idle conn
-		c := <-p.ch
-		return c, nil
-	}
-	p.connectionsTaken++
-	p.mu.Unlock()
-	ch := make(chan connectionError)
-	cancelCh := make(chan struct{})
+	// close Specify the method to close the connection
+	close := func(v interface{}) error { return v.(*nntp.Conn).Quit() }
 
-	// dial with this connection.
-	// if we manage to get a connection from
-	// a client done with theirs, we will use that one
-	// and put the idle conn
-	go func() {
-		c, err := p.dialNNTP()
-		select {
-		case <-cancelCh:
-			if err == nil {
-				p.FreeConnection(c)
-				return
-			}
-			// ignore error
-			p.mu.Lock()
-			p.connectionsTaken--
-			p.mu.Unlock()
-		case ch <- connectionError{c, err}:
-		}
-	}()
-	select {
-	case ce := <-ch:
-		return ce.c, ce.err
-	case c := <-p.ch:
-		close(cancelCh)
-		return c, nil
+	poolConfig := &pool.Config{
+		InitialCap: 10,
+		MaxIdle:    20,
+		MaxCap:     config.MaxConnections,
+		Factory:    factory,
+		Close:      close,
+		//Ping:       ping,
+		//The maximum idle time of the connection, the connection exceeding this time will be closed, which can avoid the problem of automatic failure when connecting to EOF when idle
+		IdleTimeout: 15 * time.Second,
 	}
-}
-
-func (p *connectionPool) CloseConnection(c *nntp.Conn) error {
-	err := c.Quit()
+	p, err := pool.NewChannelPool(poolConfig)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	p.mu.Lock()
-	p.connectionsTaken--
-	p.mu.Unlock()
 
-	return nil
+	return &connectionPool{
+		pool: p,
+	}, nil
 }
 
-func (p *connectionPool) FreeConnection(c *nntp.Conn) {
-	p.ch <- c
+func (p *connectionPool) Get() (*nntp.Conn, error) {
+	conn, err := p.pool.Get()
+	if err != nil {
+		return nil, err
+	}
+	return conn.(*nntp.Conn), nil
 }
 
-func (p *connectionPool) dialNNTP() (*nntp.Conn, error) {
-	dialStr := p.config.getConnectionString()
+func (p *connectionPool) Close(c *nntp.Conn) error {
+	return p.pool.Close(c)
+}
+
+func (p *connectionPool) Free(c *nntp.Conn) error {
+	return p.pool.Put(c)
+}
+
+func dialNNTP(config *Config) (*nntp.Conn, error) {
+	dialStr := config.getConnectionString()
 	var err error
 	var c *nntp.Conn
 
 	for {
-		if p.config.TLS {
-			c, err = nntp.DialTLS("tcp", dialStr, p.config.TLSConfig)
+		if config.TLS {
+			c, err = nntp.DialTLS("tcp", dialStr, config.TLSConfig)
 		} else {
 			c, err = nntp.Dial("tcp", dialStr)
 		}
@@ -125,7 +89,7 @@ func (p *connectionPool) dialNNTP() (*nntp.Conn, error) {
 		}
 
 		// auth
-		if err := c.Authenticate(p.config.Username, p.config.Password); err != nil {
+		if err := c.Authenticate(config.Username, config.Password); err != nil {
 			return nil, err
 		}
 
