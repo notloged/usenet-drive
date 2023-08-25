@@ -76,12 +76,21 @@ func (fs nzbFilesystem) RemoveAll(ctx context.Context, name string) error {
 func (fs nzbFilesystem) Rename(ctx context.Context, oldName, newName string) error {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
+
 	if oldName = fs.resolve(oldName); oldName == "" {
 		return os.ErrNotExist
 	}
 	if newName = fs.resolve(newName); newName == "" {
 		return os.ErrNotExist
 	}
+
+	originalName := getOriginalNzb(oldName)
+	if originalName != nil {
+		// If the file is a masked call the original nzb file
+		oldName = *originalName
+		newName = replaceFileExtension(newName, ".nzb")
+	}
+
 	if root := filepath.Clean(fs.root); root == oldName || root == newName {
 		// Prohibit renaming from or to the virtual root directory.
 		return os.ErrInvalid

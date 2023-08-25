@@ -5,12 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chrisfarms/nzb"
-	"github.com/hraban/lrucache"
 	"github.com/javi11/usenet-drive/internal/domain"
 )
-
-var nzbParserCache = lrucache.New(100)
 
 type NzbFile struct {
 	name   string
@@ -21,40 +17,21 @@ type NzbFile struct {
 }
 
 func NewNzbFile(name string, flag int, perm os.FileMode, cp UsenetConnectionPool, rwMutex *sync.RWMutex) (*NzbFile, error) {
-	var metadata domain.Metadata
 	var err error
-	var file *os.File
-	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		metadata, err = domain.LoadMetadata(name)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		file, err = os.OpenFile(name, flag, perm)
-	}()
-
-	wg.Wait()
+	file, err := os.OpenFile(name, flag, perm)
 	if err != nil {
 		return nil, err
 	}
 
-	var nzbFile *nzb.Nzb
+	nzbFile, err := parseNzbFile(file)
+	if err != nil {
+		return nil, err
+	}
 
-	// Cache nzb file parser since it should never change and is expensive to parse
-	hit, _ := nzbParserCache.Get(name)
-	if f, ok := hit.(*nzb.Nzb); ok {
-		nzbFile = f
-	} else {
-		nzbFile, err = nzb.New(file)
-		if err != nil {
-			return nil, err
-		}
-		nzbParserCache.Set(name, nzbFile)
+	metadata, err := domain.LoadFromNzb(nzbFile)
+	if err != nil {
+		return nil, err
 	}
 
 	return &NzbFile{

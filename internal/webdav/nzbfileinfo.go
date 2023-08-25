@@ -25,7 +25,20 @@ func NewFileInfoWithMetadata(name string) (fs.FileInfo, error) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		metadata, err = domain.LoadMetadata(name)
+		file, err := os.OpenFile(name, os.O_RDONLY, 0)
+		if err != nil {
+			return
+		}
+
+		nzbFile, err := parseNzbFile(file)
+		if err != nil {
+			return
+		}
+
+		metadata, err = domain.LoadFromNzb(nzbFile)
+		if err != nil {
+			return
+		}
 	}()
 
 	wg.Add(1)

@@ -1,32 +1,26 @@
 package domain
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"strings"
+	"strconv"
+
+	"github.com/chrisfarms/nzb"
 )
 
 type Metadata struct {
 	FileName      string `json:"file_name"`
 	FileExtension string `json:"file_extension"`
 	FileSize      int64  `json:"file_size"`
-	FileBlocks    int64  `json:"file_blocks"`
-	FileIOBlock   int64  `json:"file_io_block"`
 }
 
-func LoadMetadata(nzbFilePath string) (Metadata, error) {
-	var m Metadata
-
-	data, err := os.ReadFile(fmt.Sprintf("%s.metadata.json", strings.TrimSuffix(nzbFilePath, ".nzb")))
+func LoadFromNzb(nzbFile *nzb.Nzb) (Metadata, error) {
+	fileSize, err := strconv.ParseInt(nzbFile.Meta["file_size"], 10, 64)
 	if err != nil {
 		return Metadata{}, err
 	}
 
-	err = json.Unmarshal(data, &m)
-	if err != nil {
-		return Metadata{}, err
-	}
-
-	return m, nil
+	return Metadata{
+		FileName:      nzbFile.Meta["file_name"],
+		FileExtension: nzbFile.Meta["file_extension"],
+		FileSize:      fileSize,
+	}, nil
 }

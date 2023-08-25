@@ -80,14 +80,7 @@ func (f *customFile) Readdir(n int) ([]os.FileInfo, error) {
 		return nil, err
 	}
 
-	finalInfo := make([]os.FileInfo, 0)
-	for i, info := range infos {
-		if !isMetadataFile(info.Name()) {
-			finalInfo = append(finalInfo, infos[i])
-		}
-	}
-
-	return finalInfo, nil
+	return infos, nil
 }
 
 func (f *customFile) Readdirnames(n int) ([]string, error) {
