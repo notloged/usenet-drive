@@ -1,0 +1,17 @@
+version: "3"
+services:
+  usenet-drive:
+    platform: linux/amd64/v2
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: /usenet-drive -c /config/config.yaml
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./example/config:/config
+      - ./example/nzbs:/nzbs
+    environment:
+      - PUID=1000
+      - PGID=1000
+    restart: unless-stopped

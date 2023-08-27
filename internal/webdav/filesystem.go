@@ -7,10 +7,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/javi11/usenet-drive/internal/utils"
 	"golang.org/x/net/webdav"
 )
 
-// pasar el filesystem a la funcion
 type nzbFilesystem struct {
 	root string
 	cn   UsenetConnectionPool
@@ -88,7 +88,7 @@ func (fs nzbFilesystem) Rename(ctx context.Context, oldName, newName string) err
 	if originalName != nil {
 		// If the file is a masked call the original nzb file
 		oldName = *originalName
-		newName = replaceFileExtension(newName, ".nzb")
+		newName = utils.ReplaceFileExtension(newName, ".nzb")
 	}
 
 	if root := filepath.Clean(fs.root); root == oldName || root == newName {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/javi11/usenet-drive/internal/domain"
+	"github.com/javi11/usenet-drive/internal/utils"
 )
 
 type nzbFileInfoWithMetadata struct {
@@ -58,7 +59,7 @@ func NewFileInfoWithMetadata(name string) (fs.FileInfo, error) {
 	return &nzbFileInfoWithMetadata{
 		nzbFile: nzbFileInfo,
 		size:    metadata.FileSize,
-		name:    replaceFileExtension(fileName, metadata.FileExtension),
+		name:    utils.ReplaceFileExtension(fileName, metadata.FileExtension),
 	}, nil
 }
 

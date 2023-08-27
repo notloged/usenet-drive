@@ -1,8 +1,7 @@
-package usenet
+package uploader
 
 import (
-	"crypto/tls"
-	"fmt"
+	"strings"
 )
 
 type Config struct {
@@ -10,20 +9,24 @@ type Config struct {
 	Port           int
 	Username       string
 	Password       string
-	TLS            bool
-	TLSConfig      *tls.Config
+	Groups         []string
+	SSL            bool
 	MaxConnections int
+	fileWhiteList  []string
+	nyuuPath       string
+	articleSize    string
 }
 
-func (c *Config) getConnectionString() string {
-	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+func (c *Config) getGroups() string {
+	return strings.Join(c.Groups, ",")
 }
 
 type Option func(*Config)
 
 func defaultConfig() *Config {
 	return &Config{
-		TLS: false,
+		SSL:         false,
+		articleSize: "750K",
 	}
 }
 
@@ -51,20 +54,38 @@ func WithPassword(password string) Option {
 	}
 }
 
-func WithTLS(tls bool) Option {
+func WithGroups(groups []string) Option {
 	return func(c *Config) {
-		c.TLS = tls
+		c.Groups = groups
 	}
 }
 
-func WithTLSConfig(tlsConfig *tls.Config) Option {
+func WithSSL(ssl bool) Option {
 	return func(c *Config) {
-		c.TLSConfig = tlsConfig
+		c.SSL = ssl
 	}
 }
 
 func WithMaxConnections(maxConnections int) Option {
 	return func(c *Config) {
 		c.MaxConnections = maxConnections
+	}
+}
+
+func WithFileWhiteList(fileWhiteList []string) Option {
+	return func(c *Config) {
+		c.fileWhiteList = fileWhiteList
+	}
+}
+
+func WithNyuuPath(nyuuPath string) Option {
+	return func(c *Config) {
+		c.nyuuPath = nyuuPath
+	}
+}
+
+func WithArticleSize(articleSize string) Option {
+	return func(c *Config) {
+		c.articleSize = articleSize
 	}
 }

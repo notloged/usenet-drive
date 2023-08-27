@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/javi11/usenet-drive/internal/domain"
+	"github.com/javi11/usenet-drive/internal/utils"
 )
 
 type NzbFile struct {
@@ -39,7 +40,7 @@ func NewNzbFile(name string, flag int, perm os.FileMode, cp UsenetConnectionPool
 		mutex:  rwMutex,
 		buffer: NewBuffer(nzbFile.Files[0], int(metadata.FileSize), cp),
 		size:   metadata.FileSize,
-		name:   replaceFileExtension(name, metadata.FileExtension),
+		name:   utils.ReplaceFileExtension(name, metadata.FileExtension),
 	}, nil
 }
 
