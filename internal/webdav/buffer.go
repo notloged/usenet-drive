@@ -90,8 +90,9 @@ func (v *Buf) Read(p []byte) (int, error) {
 		return n, io.EOF
 	}
 
-	currentSegment := int(float64(v.ptr) / float64(v.nzbFile.Segments[0].Bytes))
-	beginReadAt := Max((int(v.ptr) - (currentSegment * v.nzbFile.Segments[0].Bytes)), 0)
+	currentSegment, totalBytesRead := v.getCurrent(v.nzbFile.Segments, int(v.ptr))
+	beginReadAt := Max((totalBytesRead - int(v.ptr)), 0)
+
 	for _, segment := range v.nzbFile.Segments[currentSegment:] {
 		if n >= len(p) {
 			break
@@ -123,8 +124,9 @@ func (v *Buf) ReadAt(p []byte, off int64) (int, error) {
 		return n, io.EOF
 	}
 
-	currentSegment := int(float64(off) / float64(v.nzbFile.Segments[0].Bytes))
-	beginReadAt := Max((int(off) - (currentSegment * v.nzbFile.Segments[0].Bytes)), 0)
+	currentSegment, totalBytesRead := v.getCurrent(v.nzbFile.Segments, int(off))
+	beginReadAt := Max((totalBytesRead - int(off)), 0)
+
 	for _, segment := range v.nzbFile.Segments[currentSegment:] {
 		if n >= len(p) {
 			break
@@ -184,4 +186,21 @@ func (v *Buf) downloadSegment(segment nzb.NzbSegment, groups []string) (*yenc.Pa
 	}
 
 	return chunk, nil
+}
+
+func (v *Buf) getCurrent(segments []nzb.NzbSegment, bytesRead int) (int, int) {
+	totalBytesRead := 0
+	segmentNumber := 0
+
+	for i, segment := range segments {
+		totalBytesRead += segment.Bytes
+
+		if totalBytesRead >= bytesRead {
+			segmentNumber = i
+			break
+		}
+	}
+
+	return segmentNumber, totalBytesRead
+
 }

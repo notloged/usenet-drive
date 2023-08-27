@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/javi11/usenet-drive/internal/utils"
@@ -31,14 +30,16 @@ func NewUploader(options ...Option) (*uploader, error) {
 	}
 
 	args := []string{
-		fmt.Sprintf(`-h "%s"`, config.Host),
-		fmt.Sprintf(`-u "%s"`, config.Username),
-		fmt.Sprintf(`-p "%s"`, config.Password),
-		fmt.Sprintf(`-g "%s"`, config.getGroups()),
+		fmt.Sprintf("--host=%s", config.Host),
+		fmt.Sprintf("--user=%s", config.Username),
+		fmt.Sprintf("--password=%s", config.Password),
+		fmt.Sprintf("--groups=%s", config.getGroups()),
 		fmt.Sprintf("--article-size=%v", config.articleSize),
 		fmt.Sprintf("--port=%v", config.Port),
 		fmt.Sprintf("--connections=%v", config.MaxConnections),
-		"--verbose",
+		// overwirte nzb if exists
+		"--overwrite",
+		"--progress=stdout",
 	}
 
 	if config.SSL {
@@ -64,15 +65,14 @@ func (u *uploader) UploadFile(ctx context.Context, filePath string) error {
 
 	args := append(
 		u.commonArgs,
-		fmt.Sprintf(`--filename=%s`, fileName),
-		fmt.Sprintf(`-M "file_size: %d"`, fileInfo.Size()),
-		fmt.Sprintf(`-M "file_name: %s"`, fileInfo.Name()),
-		fmt.Sprintf(`-M "file_extension: %s"`, filepath.Ext(fileInfo.Name())),
-		fmt.Sprintf(`--from=%s`, u.generateFrom()),
-		fmt.Sprintf(`--input-file=%s`, filePath),
-		fmt.Sprintf(`--out=%s`, utils.ReplaceFileExtension(filePath, ".nzb")),
+		fmt.Sprintf("--filename=%s", fileName),
+		fmt.Sprintf("-M file_size: %d", fileInfo.Size()),
+		fmt.Sprintf("-M file_name: %s", fileInfo.Name()),
+		fmt.Sprintf("-M file_extension: %s", filepath.Ext(fileInfo.Name())),
+		fmt.Sprintf("--from=%s", u.generateFrom()),
+		fmt.Sprintf("--out=%s", utils.ReplaceFileExtension(filePath, ".nzb")),
+		filePath,
 	)
-	fmt.Printf("Uploading with args %s...\n", strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, u.scriptPath, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
