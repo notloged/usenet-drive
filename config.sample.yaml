@@ -1,0 +1,29 @@
+nzb_path: /nzbs
+server_port: 8080
+db_path: /config/usenet-drive.db
+usenet:
+  download:
+    host: my.usenet.server
+    port: 80
+    username: pepe
+    password: 1234
+    ssl: true
+    max_connections: 49
+  upload:
+    nyuu_path: /config/nyuu
+    upload_interval_in_seconds: 20
+    provider:
+      host: post.otherusenet.server
+      port: 119
+      username: pepe
+      password: 1234
+      ssl: false
+      max_connections: 25
+      groups:
+        - alt.binaries.test
+    max_active_uploads: 2
+    file_whitelist:
+      - .mkv
+      - .mp4
+      - .avi
+      - .ts

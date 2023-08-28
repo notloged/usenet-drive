@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/javi11/usenet-drive/internal/domain"
 	"golang.org/x/net/webdav"
 )
 
-func StartServer(config domain.Config, cp UsenetConnectionPool) (*http.Server, error) {
+func StartServer(cp UsenetConnectionPool, options ...Option) (*http.Server, error) {
+	config := defaultConfig()
+	for _, option := range options {
+		option(config)
+	}
+
 	handler := &webdav.Handler{
 		FileSystem: NewNzbFilesystem(config.NzbPath, cp),
 		LockSystem: webdav.NewMemLS(),

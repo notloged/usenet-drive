@@ -23,22 +23,24 @@ type Buffer interface {
 
 // Buf is a Buffer working on a slice of bytes.
 type Buf struct {
-	size    int
-	nzbFile *nzb.NzbFile
-	ptr     int64
-	cache   *lrucache.Cache
-	cp      UsenetConnectionPool
-	mx      sync.RWMutex
+	size      int
+	nzbFile   *nzb.NzbFile
+	ptr       int64
+	cache     *lrucache.Cache
+	cp        UsenetConnectionPool
+	mx        sync.RWMutex
+	chunkSize int
 }
 
 // NewBuffer creates a new data volume based on a buffer
-func NewBuffer(nzbFile *nzb.NzbFile, size int, cp UsenetConnectionPool) *Buf {
+func NewBuffer(nzbFile *nzb.NzbFile, size int, chunkSize int, cp UsenetConnectionPool) *Buf {
 	return &Buf{
-		size:    size,
-		nzbFile: nzbFile,
-		cache:   lrucache.New(int64(len(nzbFile.Segments))),
-		cp:      cp,
-		mx:      sync.RWMutex{},
+		chunkSize: chunkSize,
+		size:      size,
+		nzbFile:   nzbFile,
+		cache:     lrucache.New(int64(len(nzbFile.Segments))),
+		cp:        cp,
+		mx:        sync.RWMutex{},
 	}
 }
 
@@ -90,8 +92,9 @@ func (v *Buf) Read(p []byte) (int, error) {
 		return n, io.EOF
 	}
 
-	currentSegment := int(float64(v.ptr) / float64(v.nzbFile.Segments[0].Bytes))
-	beginReadAt := Max((int(v.ptr) - (currentSegment * v.nzbFile.Segments[0].Bytes)), 0)
+	currentSegment := int(float64(v.ptr) / float64(v.chunkSize))
+	beginReadAt := Max((int(v.ptr) - (currentSegment * v.chunkSize)), 0)
+
 	for _, segment := range v.nzbFile.Segments[currentSegment:] {
 		if n >= len(p) {
 			break
@@ -123,8 +126,9 @@ func (v *Buf) ReadAt(p []byte, off int64) (int, error) {
 		return n, io.EOF
 	}
 
-	currentSegment := int(float64(off) / float64(v.nzbFile.Segments[0].Bytes))
-	beginReadAt := Max((int(off) - (currentSegment * v.nzbFile.Segments[0].Bytes)), 0)
+	currentSegment := int(float64(off) / float64(v.chunkSize))
+	beginReadAt := Max((int(off) - (currentSegment * v.chunkSize)), 0)
+
 	for _, segment := range v.nzbFile.Segments[currentSegment:] {
 		if n >= len(p) {
 			break

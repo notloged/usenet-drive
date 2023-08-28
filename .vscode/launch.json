@@ -10,7 +10,7 @@
             "request": "launch",
             "mode": "auto",
             "program": "${cwd}/cmd/usenet-drive",
-            "args": ["-c", "${cwd}/example/config.yaml"]
+            "args": ["-c", "${cwd}/example/config/config.yaml"]
         }
     ]
 }
