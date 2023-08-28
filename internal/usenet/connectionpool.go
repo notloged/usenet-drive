@@ -39,7 +39,7 @@ func NewConnectionPool(options ...Option) (*connectionPool, error) {
 		Close:      close,
 		//Ping:       ping,
 		//The maximum idle time of the connection, the connection exceeding this time will be closed, which can avoid the problem of automatic failure when connecting to EOF when idle
-		IdleTimeout: 15 * time.Second,
+		IdleTimeout: 60 * time.Second,
 	}
 	p, err := pool.NewChannelPool(poolConfig)
 	if err != nil {

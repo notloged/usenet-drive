@@ -94,6 +94,11 @@ func (q *sQLiteQueue) Dequeue(ctx context.Context, limit int) ([]Job, error) {
 			Data:      data,
 			CreatedAt: createdAt,
 		})
+
+		_, err := tx.ExecContext(ctx, "DELETE FROM queue WHERE id = ?", id)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = tx.Commit()

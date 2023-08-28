@@ -50,12 +50,13 @@ func (q *uploadQueue) ProcessJob(ctx context.Context, job sqllitequeue.Job) erro
 		if os.IsNotExist(err) {
 			// Corrupted files
 			q.log.Printf("File %v does not exist, removing job...", job.Data)
-			err = q.engine.Delete(ctx, job.ID)
 			if err != nil {
 				return err
 			}
 		}
-		return err
+
+		q.log.Printf("Failed to upload file %v: %v. Retrying...", job.Data, err)
+		return q.engine.Enqueue(ctx, job.Data)
 	}
 
 	// Remove .tmp extension from nzbFilePath

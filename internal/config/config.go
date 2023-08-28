@@ -24,7 +24,7 @@ type Upload struct {
 	FileWhitelist           []string       `yaml:"file_whitelist"`
 	NyuuVersion             string         `yaml:"nyuu_version" default:"0.4.1"`
 	NyuuPath                string         `yaml:"nyuu_path" default:"/config/nyuu"`
-	MaxActiveUploads        int            `yaml:"max_active_uploads"`
+	MaxActiveUploads        int            `yaml:"max_active_uploads" default:"2"`
 	UploadIntervalInSeconds float64        `yaml:"upload_interval_in_seconds" default:"60"`
 }
 
