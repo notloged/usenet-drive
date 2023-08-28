@@ -69,6 +69,7 @@ func (u *uploader) UploadFile(ctx context.Context, filePath string) error {
 		fmt.Sprintf("-M file_size: %d", fileInfo.Size()),
 		fmt.Sprintf("-M file_name: %s", fileInfo.Name()),
 		fmt.Sprintf("-M file_extension: %s", filepath.Ext(fileInfo.Name())),
+		"--subject=[{0filenum}/{files}] - \"{filename}\" - size={size} - yEnc ({part}/{parts}) {filesize}",
 		fmt.Sprintf("--from=%s", u.generateFrom()),
 		fmt.Sprintf("--out=%s", utils.ReplaceFileExtension(filePath, ".nzb")),
 		filePath,
