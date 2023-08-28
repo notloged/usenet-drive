@@ -47,10 +47,31 @@ rclone mount --allow-other --async-read=true --dir-cache-time=1000h --buffer-siz
 - [ ] Open split files
 - [ ] Open rar files
 - [ ] Tests
+- [ ] log system rotation
 
 ## Docker usage
 
-### Build
+### Run
+
+Create example folder structure:
+
+```bash
+mkdir -p ./example/config ./example/nzbs
+```
+
+Create example config file:
+
+```bash
+cp config.sample.yaml ./example/config/config.yaml
+```
+
+Edit the config file:
+
+```bash
+nano ./example/config/config.yaml
+```
+
+Run docker compose:
 
 ```bash
 docker-compose up

@@ -18,8 +18,6 @@ func DownloadNyuuRelease(version string, path string) error {
 	switch arch {
 	case "amd64":
 		arch = "amd64"
-	case "arm64":
-		arch = "amd64"
 	case "win32":
 		arch = "win32"
 	case "x64":

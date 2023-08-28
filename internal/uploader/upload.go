@@ -71,6 +71,7 @@ func (u *uploader) UploadFile(ctx context.Context, filePath string) (string, err
 		fmt.Sprintf("-M file_size: %d", fileInfo.Size()),
 		fmt.Sprintf("-M file_name: %s", fileInfo.Name()),
 		fmt.Sprintf("-M file_extension: %s", filepath.Ext(fileInfo.Name())),
+		// size of the article is needed to calculate the number of parts on streaming
 		"--subject=[{0filenum}/{files}] - \"{filename}\" - size={size} - yEnc ({part}/{parts}) {filesize}",
 		fmt.Sprintf("--from=%s", u.generateFrom()),
 		fmt.Sprintf("--out=%s", nzbFilePath),

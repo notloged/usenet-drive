@@ -7,14 +7,14 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Build the Go application inside the container
 COPY . ./
+# Build the Go application inside the container
 RUN make build
 
-# Expose the port that the application will listen on
-FROM golang:1.21-bullseye
+FROM golang:1.21-bullseye AS builder
 
 COPY --from=builder /app/bin/ /
+# Expose the port that the application will listen on
 EXPOSE 8080
 VOLUME ["/config", "/nzbs"]
 
