@@ -3,6 +3,7 @@ package uploadqueue
 import (
 	"context"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -44,12 +45,38 @@ func (q *uploadQueue) AddJob(ctx context.Context, filePath string) error {
 
 func (q *uploadQueue) ProcessJob(ctx context.Context, job sqllitequeue.Job) error {
 	q.log.Printf("Uploading file %v...", job.Data)
-	err := q.uploader.UploadFile(ctx, job.Data)
+	nzbFilePath, err := q.uploader.UploadFile(ctx, job.Data)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Corrupted files
+			q.log.Printf("File %v does not exist, removing job...", job.Data)
+			err = q.engine.Delete(ctx, job.ID)
+			if err != nil {
+				return err
+			}
+		}
+		return err
+	}
+
+	// Remove .tmp extension from nzbFilePath
+	newFilePath := nzbFilePath[:len(nzbFilePath)-4]
+
+	err = os.Rename(nzbFilePath, newFilePath)
 	if err != nil {
 		return err
 	}
 
-	return q.engine.Delete(ctx, job.ID)
+	err = os.Remove(job.Data)
+	if err != nil {
+		return err
+	}
+
+	err = q.engine.Delete(ctx, job.ID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (q *uploadQueue) Start(ctx context.Context, interval time.Duration) {

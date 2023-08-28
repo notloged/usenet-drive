@@ -66,6 +66,13 @@ func (fs nzbFilesystem) RemoveAll(ctx context.Context, name string) error {
 	if name = fs.resolve(name); name == "" {
 		return os.ErrNotExist
 	}
+
+	originalName := getOriginalNzb(name)
+	if originalName != nil {
+		// If the file is a masked call the original nzb file
+		name = *originalName
+	}
+
 	if name == filepath.Clean(fs.root) {
 		// Prohibit removing the virtual root directory.
 		return os.ErrInvalid

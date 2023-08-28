@@ -21,6 +21,10 @@ func LoadFromNzb(nzbFile *nzb.Nzb) (Metadata, error) {
 		return Metadata{}, err
 	}
 
+	if len(nzbFile.Files) == 0 {
+		return Metadata{}, fmt.Errorf("corrupted nzb file")
+	}
+
 	// Chunk size is present in the file subject string
 	// segment size is not the real size of a segment. Segment size = chunk size + yenc overhead
 	chunkSize, err := getChunkSizeFromSubject(nzbFile.Files[0].Subject)

@@ -15,7 +15,7 @@ import (
 )
 
 type Uploader interface {
-	UploadFile(ctx context.Context, filePath string) error
+	UploadFile(ctx context.Context, filePath string) (string, error)
 }
 
 type uploader struct {
@@ -39,7 +39,7 @@ func NewUploader(options ...Option) (*uploader, error) {
 		fmt.Sprintf("--connections=%v", config.MaxConnections),
 		// overwirte nzb if exists
 		"--overwrite",
-		"--progress=stdout",
+		"--progress=log:5s",
 	}
 
 	if config.SSL {
@@ -52,16 +52,18 @@ func NewUploader(options ...Option) (*uploader, error) {
 	}, nil
 }
 
-func (u *uploader) UploadFile(ctx context.Context, filePath string) error {
+func (u *uploader) UploadFile(ctx context.Context, filePath string) (string, error) {
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	fileName, err := u.generateHashName(fileInfo.Name())
 	if err != nil {
-		return err
+		return "", err
 	}
+
+	nzbFilePath := utils.ReplaceFileExtension(filePath, ".nzb.tmp")
 
 	args := append(
 		u.commonArgs,
@@ -71,14 +73,19 @@ func (u *uploader) UploadFile(ctx context.Context, filePath string) error {
 		fmt.Sprintf("-M file_extension: %s", filepath.Ext(fileInfo.Name())),
 		"--subject=[{0filenum}/{files}] - \"{filename}\" - size={size} - yEnc ({part}/{parts}) {filesize}",
 		fmt.Sprintf("--from=%s", u.generateFrom()),
-		fmt.Sprintf("--out=%s", utils.ReplaceFileExtension(filePath, ".nzb")),
+		fmt.Sprintf("--out=%s", nzbFilePath),
 		filePath,
 	)
 	cmd := exec.CommandContext(ctx, u.scriptPath, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	return cmd.Run()
+	err = cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	return nzbFilePath, nil
 }
 
 func (u *uploader) generateFrom() string {
