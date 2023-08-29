@@ -48,6 +48,4 @@ jobs:
         with:
           push: true
           platforms: linux/amd64,linux/ppc64le
-          tags: |
-            laris11/usenet-drive:${{github.ref_name}}
-            laris11/usenet-drive:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/usenet-drive:${{github.ref_name}}, ${{ secrets.DOCKERHUB_USERNAME }}/usenet-drive:latest
