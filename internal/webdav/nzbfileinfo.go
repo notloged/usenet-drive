@@ -11,9 +11,9 @@ import (
 )
 
 type nzbFileInfoWithMetadata struct {
-	nzbFile os.FileInfo
-	size    int64
-	name    string
+	nzbFile  os.FileInfo
+	name     string
+	metadata domain.Metadata
 }
 
 func NewFileInfoWithMetadata(name string) (fs.FileInfo, error) {
@@ -57,18 +57,20 @@ func NewFileInfoWithMetadata(name string) (fs.FileInfo, error) {
 	fileName := nzbFileInfo.Name()
 
 	return &nzbFileInfoWithMetadata{
-		nzbFile: nzbFileInfo,
-		size:    metadata.FileSize,
-		name:    utils.ReplaceFileExtension(fileName, metadata.FileExtension),
+		nzbFile:  nzbFileInfo,
+		metadata: metadata,
+		name:     utils.ReplaceFileExtension(fileName, metadata.FileExtension),
 	}, nil
 }
 
 func (fi *nzbFileInfoWithMetadata) Size() int64 {
-	return fi.size
+	// We need the original file size to display it.
+	return fi.metadata.FileSize
 }
 
 func (fi *nzbFileInfoWithMetadata) ModTime() time.Time {
-	return fi.nzbFile.ModTime()
+	// We need the original file mod time in order to allow comparing when replace a file. Files will never be modified.
+	return fi.metadata.ModTime
 }
 
 func (fi *nzbFileInfoWithMetadata) IsDir() bool {

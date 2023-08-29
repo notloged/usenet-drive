@@ -4,15 +4,17 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/chrisfarms/nzb"
 )
 
 type Metadata struct {
-	FileName      string `json:"file_name"`
-	FileExtension string `json:"file_extension"`
-	FileSize      int64  `json:"file_size"`
-	ChunkSize     int64  `json:"chunk_size"`
+	FileName      string    `json:"file_name"`
+	FileExtension string    `json:"file_extension"`
+	FileSize      int64     `json:"file_size"`
+	ModTime       time.Time `json:"mod_time"`
+	ChunkSize     int64     `json:"chunk_size"`
 }
 
 func LoadFromNzb(nzbFile *nzb.Nzb) (Metadata, error) {
@@ -32,11 +34,17 @@ func LoadFromNzb(nzbFile *nzb.Nzb) (Metadata, error) {
 		return Metadata{}, err
 	}
 
+	modTime, err := time.Parse(time.DateTime, nzbFile.Meta["mod_time"])
+	if err != nil {
+		return Metadata{}, err
+	}
+
 	return Metadata{
 		FileName:      nzbFile.Meta["file_name"],
 		FileExtension: nzbFile.Meta["file_extension"],
 		FileSize:      fileSize,
 		ChunkSize:     chunkSize,
+		ModTime:       modTime,
 	}, nil
 }
 
