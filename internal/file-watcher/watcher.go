@@ -52,8 +52,23 @@ func (w *Watcher) Start(ctx context.Context) {
 				mu.Lock()
 				delete(timers, e.Name)
 				mu.Unlock()
-				w.log.Printf("File %s created, adding to upload queue", e.Name)
-				w.queue.AddJob(ctx, e.Name)
+				err := filepath.Walk(e.Name, func(path string, info os.FileInfo, err error) error {
+					if err != nil {
+						return err
+					}
+					if !info.IsDir() && hasAllowedExtension(path, w.fileWhitelist) {
+						w.log.Printf("File %s created, adding to upload queue", path)
+						w.queue.AddJob(ctx, path)
+					}
+					if info.IsDir() {
+						w.watcher.Add(path)
+					}
+					return nil
+				})
+				if err != nil {
+					w.log.Printf("error walking directory %s: %v", e.Name, err)
+				}
+				return
 			}
 		)
 
@@ -78,7 +93,7 @@ func (w *Watcher) Start(ctx context.Context) {
 
 				// We just want to watch for file creation, so ignore everything
 				// outside of Create and Write and files that don't have an allowed extension.
-				if (e.Has(fsnotify.Create) || e.Has(fsnotify.Write)) && hasAllowedExtension(e.Name, w.fileWhitelist) {
+				if e.Has(fsnotify.Create) || e.Has(fsnotify.Write) {
 					// Get timer.
 					mu.Lock()
 					t, ok := timers[e.Name]
@@ -96,6 +111,8 @@ func (w *Watcher) Start(ctx context.Context) {
 
 					// Reset the timer for this path, so it will start from 100ms again.
 					t.Reset(waitFor)
+				} else if e.Has(fsnotify.Remove) {
+					w.watcher.Remove(e.Name)
 				}
 			}
 		}
