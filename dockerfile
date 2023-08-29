@@ -11,7 +11,13 @@ COPY . ./
 # Build the Go application inside the container
 RUN make build
 
-FROM golang:1.21-bullseye
+FROM ghcr.io/linuxserver/baseimage-ubuntu:jammy
+ARG DEBIAN_FRONTEND="noninteractive"
+ARG BUILD_DATE
+ARG VERSION
+
+LABEL build_version="Linuxserver.io version:- ${VERSION} Build-date:- ${BUILD_DATE}"
+LABEL maintainer="laris11"
 
 COPY --from=builder /app/bin/ /
 # Expose the port that the application will listen on
