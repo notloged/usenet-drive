@@ -11,7 +11,7 @@ COPY . ./
 # Build the Go application inside the container
 RUN make build
 
-FROM golang:1.21-bullseye AS builder
+FROM golang:1.21-bullseye
 
 COPY --from=builder /app/bin/ /
 # Expose the port that the application will listen on
