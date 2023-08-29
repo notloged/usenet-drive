@@ -15,9 +15,6 @@ jobs:
         # build and publish in parallel: linux/386, linux/amd64, linux/arm64, windows/386, windows/amd64, darwin/amd64
         goos: [linux, darwin]
         goarch: ['386', amd64]
-        exclude:
-          - goarch: '386'
-            goos: darwin
     steps:
       - uses: actions/checkout@v3
       - name: Create binary release
@@ -28,6 +25,12 @@ jobs:
           goarch: ${{ matrix.goarch }}
           binary_name: 'usenet-drive'
           extra_files: README.md
+          project_path: "./cmd/usenet-drive"
+  release-docker:
+    name: Release Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
@@ -41,4 +44,5 @@ jobs:
         uses: docker/build-push-action@v4.1.1
         with:
           push: true
-          tags: laris11/usenet-drive:latest
+          platforms: linux/amd64,linux/ppc64le
+          tags: laris11/usenet-drive:${{github.ref_name}}
