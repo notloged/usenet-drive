@@ -47,5 +47,5 @@ jobs:
         uses: docker/build-push-action@v4.1.1
         with:
           push: true
-          platforms: linux/amd64,linux/ppc64le
+          platforms: linux/amd64
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/usenet-drive:${{github.ref_name}}, ${{ secrets.DOCKERHUB_USERNAME }}/usenet-drive:latest
