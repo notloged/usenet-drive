@@ -4,9 +4,9 @@
 
 This is a simple script that allows you to mount a usenet server as a webdav drive.
 
-***This is not a tool to mount any nzb files, nzb files that are supported on the tool needs to be created by this tool.***
+**_This is not a tool to mount any nzb files, nzb files that are supported on the tool needs to be created by this tool._**
 
-***Use at your own risk***
+**_Use at your own risk_**
 
 ## Usage with rclone
 
@@ -41,40 +41,79 @@ rclone mount --allow-other --async-read=true --dir-cache-time=1000h --buffer-siz
 - Filesystem watch for new files and upload them to usenet automatically
 - Multiple server for upload and download
 
-## Todo
+## Usage
 
-- [ ] Multiple server for download
-- [ ] Open split files
-- [ ] Open rar files
-- [ ] Tests
-- [ ] log system rotation
+### Download
+
+Choose the release for your system at [releases](https://github.com/javi11/usenet-drive/releases).
+
+### Run
+
+Create the required folders:
+
+```bash
+mkdir -p ./config ./nzbs
+```
+
+Create the config file:
+
+```bash
+nano ./config/config.yaml
+```
+
+See an example at [config.yaml](config.sample.yaml).
+
+Run the application:
+
+```bash
+./usenet-drive -c ./config/config.yaml
+```
 
 ## Docker usage
 
 ### Run
 
-Create example folder structure:
+Create the required folders:
 
 ```bash
-mkdir -p ./example/config ./example/nzbs
+mkdir -p ./config ./nzbs
 ```
 
-Create example config file:
+Create a config file:
 
 ```bash
-cp config.sample.yaml ./example/config/config.yaml
+cp config.sample.yaml ./config/config.yaml
 ```
 
 Edit the config file:
 
 ```bash
-nano ./example/config/config.yaml
+nano ./config/config.yaml
 ```
 
 Run docker compose:
 
 ```bash
 docker-compose up
+```
+
+Alternatively, you can run the docker image directly creating a docker compose:
+
+```yaml
+version: "3"
+services:
+  usenet-drive:
+    image: laris11/usenet-drive:latest
+    command: /usenet-drive -c /config/config.yaml
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/config
+      - ./nzbs:/nzbs
+    environment:
+      - PUID=1000
+      - PGID=1000
+    restart: unless-stopped
 ```
 
 ## Config Struct
@@ -106,7 +145,7 @@ The `Upload` struct defines the Usenet provider for uploading.
 - `Provider` (UsenetProvider): The Usenet provider for uploading.
 - `FileWhitelist` ([]string): The list of allowed file extensions. For example, `[".mkv", ".mp4"]`, in this case only files with the extensions `.mkv` and `.mp4` will be uploaded to usenet. Take care not upload files that change frequently, like subtitules or text files, since they will be uploaded every time they change. In usenet you can not edit files.
 - `NyuuVersion` (string): The version of [Nyuu](https://github.com/animetosho/Nyuu). Default value is `0.4.1`. Used for upload files to usenet.
-- `NyuuPath` (string): The path to [Nyuu](https://github.com/animetosho/Nyuu). Default value is `/config/nyuu`. If nyuu executable is not found, it will be auto downloaded for the given system arch.  Used for upload files to usenet.
+- `NyuuPath` (string): The path to [Nyuu](https://github.com/animetosho/Nyuu). Default value is `/config/nyuu`. If nyuu executable is not found, it will be auto downloaded for the given system arch. Used for upload files to usenet.
 - `MaxActiveUploads` (int): The maximum number of active uploads. Be aware that the number of active uploads are related with the number of maxConnections. For example, if your provider allows 20 connections, to avoid problems, if you want 2 active uploads you should put 10 max connections. Default value is `2`.
 - `UploadIntervalInSeconds` (float64): The upload interval in seconds. After X seconds the system will check for pending uploads and perform them. Default value is `60`.
 
@@ -123,3 +162,13 @@ The `UsenetProvider` struct defines the Usenet provider configuration.
 - `Groups` ([]string): The list of Usenet groups. For example, `["alt.binaries.teevee", "alt.binaries.movies"]`.
 - `SSL` (bool): Whether to use SSL for the Usenet provider. Default value is `true`.
 - `MaxConnections` (int): The maximum number of connections to the Usenet provider.
+
+## Todo
+
+- [ ] Multiple server for download
+- [ ] Open split files
+- [ ] Open rar files
+- [ ] Tests
+- [ ] log system rotation
+- [ ] windows support
+- [ ] mac support
