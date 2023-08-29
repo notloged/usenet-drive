@@ -39,8 +39,8 @@ func (w *Watcher) Start(ctx context.Context) {
 
 	go func() {
 		var (
-			// Wait 10s for new events; each new event resets the timer.
-			waitFor = 10000 * time.Millisecond
+			// Wait 5000ms for new events; each new event resets the timer.
+			waitFor = 1000 * time.Millisecond
 
 			// Keep track of the timers, as path → timer.
 			mu     sync.Mutex
@@ -52,20 +52,27 @@ func (w *Watcher) Start(ctx context.Context) {
 				mu.Lock()
 				delete(timers, e.Name)
 				mu.Unlock()
-				_ = filepath.Walk(e.Name, func(path string, info os.FileInfo, err error) error {
-					if err != nil {
-						return err
+
+				info, err := os.Stat(e.Name)
+				if err != nil {
+					// Fail silently if the file was removed.
+					if os.IsNotExist(err) {
+						return
 					}
-					if !info.IsDir() && hasAllowedExtension(path, w.fileWhitelist) {
-						w.log.Printf("File %s created, adding to upload queue", path)
-						w.queue.AddJob(ctx, path)
-					}
-					if info.IsDir() {
-						w.watcher.Add(path)
-					}
-					return nil
-				})
-				// Ignore errors.
+					w.log.Printf("file watcher error: %v", err)
+					return
+				}
+
+				if info.IsDir() {
+					w.log.Printf("Directory %s created, adding to file watcher", e.Name)
+					w.watcher.Add(e.Name)
+					return
+				}
+
+				if hasAllowedExtension(e.Name, w.fileWhitelist) {
+					w.log.Printf("File %s created, adding to upload queue", e.Name)
+					w.queue.AddJob(ctx, e.Name)
+				}
 
 				return
 			}

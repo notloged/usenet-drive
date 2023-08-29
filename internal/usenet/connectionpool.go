@@ -31,8 +31,10 @@ func NewConnectionPool(options ...Option) (*connectionPool, error) {
 	// close Specify the method to close the connection
 	close := func(v interface{}) error { return v.(*nntp.Conn).Quit() }
 
+	twentyPercent := int(float64(config.MaxConnections) * 0.2)
+
 	poolConfig := &pool.Config{
-		InitialCap: 10,
+		InitialCap: twentyPercent,
 		MaxIdle:    20,
 		MaxCap:     config.MaxConnections,
 		Factory:    factory,
