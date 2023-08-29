@@ -52,7 +52,7 @@ func (w *Watcher) Start(ctx context.Context) {
 				mu.Lock()
 				delete(timers, e.Name)
 				mu.Unlock()
-				err := filepath.Walk(e.Name, func(path string, info os.FileInfo, err error) error {
+				_ = filepath.Walk(e.Name, func(path string, info os.FileInfo, err error) error {
 					if err != nil {
 						return err
 					}
@@ -65,9 +65,8 @@ func (w *Watcher) Start(ctx context.Context) {
 					}
 					return nil
 				})
-				if err != nil {
-					w.log.Printf("error walking directory %s: %v", e.Name, err)
-				}
+				// Ignore errors.
+
 				return
 			}
 		)
