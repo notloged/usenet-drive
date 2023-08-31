@@ -2,6 +2,7 @@ package uploadqueue
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"os"
 	"sync"
@@ -10,7 +11,6 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/javi11/usenet-drive/internal/uploader"
 	sqllitequeue "github.com/javi11/usenet-drive/pkg/sqllite-queue"
-	"github.com/mattn/go-sqlite3"
 )
 
 type UploadQueue interface {
@@ -148,7 +148,7 @@ func (q *uploadQueue) GetPendingJobs(ctx context.Context) ([]sqllitequeue.Job, e
 func (q *uploadQueue) DeleteFailedJob(ctx context.Context, id int64) error {
 	err := q.engine.DeleteFailedJob(ctx, id)
 	if err != nil {
-		if err == sqlite3.ErrNotFound {
+		if err == sql.ErrNoRows {
 			return ErrJobNotFound
 		}
 		return err
@@ -160,7 +160,7 @@ func (q *uploadQueue) DeleteFailedJob(ctx context.Context, id int64) error {
 func (q *uploadQueue) RetryJob(ctx context.Context, id int64) error {
 	job, err := q.engine.DequeueFailedJobById(ctx, id)
 	if err != nil {
-		if err == sqlite3.ErrNotFound {
+		if err == sql.ErrNoRows {
 			return ErrJobNotFound
 		}
 		return err
