@@ -91,7 +91,7 @@ func (q *sQLiteQueue) Dequeue(ctx context.Context, limit int) ([]Job, error) {
 	}
 	defer rows.Close()
 
-	var jobs []Job
+	var jobs []Job = make([]Job, 0)
 	for rows.Next() {
 		var id int
 		var data string
@@ -173,7 +173,7 @@ func (q *sQLiteQueue) PushToFailedQueue(ctx context.Context, data string, error 
 		return err
 	}
 
-	stmt, err := tx.PrepareContext(ctx, "INSERT INTO queue (data, error) VALUES (?, ?)")
+	stmt, err := tx.PrepareContext(ctx, "INSERT INTO failed_queue (data, error) VALUES (?, ?)")
 	if err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func (q *sQLiteQueue) GetFailedJobs(ctx context.Context) ([]Job, error) {
 	}
 	defer rows.Close()
 
-	var jobs []Job
+	var jobs []Job = make([]Job, 0)
 	for rows.Next() {
 		var id int
 		var data string
@@ -261,7 +261,7 @@ func (q *sQLiteQueue) GetPendingJobs(ctx context.Context) ([]Job, error) {
 	}
 	defer rows.Close()
 
-	var jobs []Job
+	var jobs []Job = make([]Job, 0)
 	for rows.Next() {
 		var id int
 		var data string
