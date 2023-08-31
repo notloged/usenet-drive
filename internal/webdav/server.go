@@ -31,10 +31,14 @@ func NewServer(options ...Option) (*webdavServer, error) {
 }
 
 func (s *webdavServer) Start(port string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		s.handler.ServeHTTP(w, r)
+	})
 	addr := fmt.Sprintf(":%s", port)
 
 	log.Printf("WebDav server started at http://localhost:%v", port)
-	err := http.ListenAndServe(addr, s.handler)
+	err := http.ListenAndServe(addr, mux)
 	if err != nil {
 		log.Fatalf("failed to start WebDav server: %v", err)
 	}

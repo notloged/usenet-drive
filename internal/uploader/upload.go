@@ -69,9 +69,9 @@ func (u *uploader) UploadFile(ctx context.Context, path string) (string, error) 
 
 	nzbFilePath := utils.ReplaceFileExtension(path, nzbTmpExtension)
 	nzbFilePath = filepath.Join(
-		filepath.Dir(path),
+		filepath.Dir(nzbFilePath),
 		utils.TruncateFileName(
-			filepath.Base(path),
+			filepath.Base(nzbFilePath),
 			// 255 is the max length of a file name in most filesystems
 			255-len(nzbTmpExtension),
 		),

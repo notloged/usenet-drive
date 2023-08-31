@@ -105,7 +105,6 @@ func (q *uploadQueue) Start(ctx context.Context, interval time.Duration) {
 				}
 
 				if len(jobs) == 0 {
-					q.log.Printf("No jobs to process...")
 					continue
 				}
 
