@@ -133,6 +133,7 @@ The `Config` struct defines the configuration for the Usenet Drive application. 
 
 ### Fields
 
+- `nzb_cache_size` (int): The number of NZBs to keep in memory. Default value is `100`. WARN remember that each NZB can be a big file increasing this will increase the memory usage.
 - `nzb_path` (string): The path to the NZBs file. This will be the path where all nzbs will be saved making the virtual file system.
 - `web_dav_port` (string): The port number for the server. Default value is `8080`.
 - `api_port` (string): The port number for the server. Default value is `8080`.

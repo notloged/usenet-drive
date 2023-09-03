@@ -36,7 +36,11 @@ type Buf struct {
 
 // NewBuffer creates a new data volume based on a buffer
 func NewBuffer(nzbFile *nzb.NzbFile, size int, chunkSize int, cp usenet.UsenetConnectionPool) (*Buf, error) {
-	cache, err := lru.New[string, *yenc.Part](len(nzbFile.Segments))
+	// Article cache can not be too big since it is stored in memory
+	// With 100 the max memory used is 100 * 740kb = 74mb peer stream
+	// This is mainly used to not redownload the same article multiple times if was not already
+	// full readed.
+	cache, err := lru.New[string, *yenc.Part](100)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +87,7 @@ func (v *Buf) Seek(offset int64, whence int) (int64, error) {
 
 // Close the buffer. Currently no effect.
 func (v *Buf) Close() error {
+	v.cache.Purge()
 	return nil
 }
 

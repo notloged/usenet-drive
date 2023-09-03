@@ -73,6 +73,10 @@ func (f *nzbFile) Chown(uid, gid int) error {
 }
 
 func (f *nzbFile) Close() error {
+	if err := f.buffer.Close(); err != nil {
+		return err
+	}
+
 	return f.innerFile.Close()
 }
 
