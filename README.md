@@ -39,6 +39,11 @@ rclone mount --allow-other --async-read=true --dir-cache-time=1000h --buffer-siz
 
 An API to control the server, is available at `http://localhost:8081/api/v1/`.
 
+### WebAdmin
+
+WebAdmin, is available at `http://localhost:8081`.
+
+
 #### Endpoints
 
 See the endpoints at [api.yaml](./internal/api/api.go).
