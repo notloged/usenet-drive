@@ -28,7 +28,7 @@ type adminPanel struct {
 // - GET /api/v1/jobs/in-progres: retrieves a list of in-progres upload jobs.
 // - DELETE /api/v1/jobs/failed/:id: deletes a failed upload job with the given ID.
 // - DELETE /api/v1/jobs/pending/:id: deletes a pending upload job with the given ID.
-// - GET /api/v1/jobs/failed/:id/retry: retries a failed upload job with the given ID.
+// - PUT /api/v1/jobs/failed/:id/retry: retries a failed upload job with the given ID.
 func New(queue uploadqueue.UploadQueue, si serverinfo.ServerInfo, log *slog.Logger) *adminPanel {
 	e := echo.New()
 	e.Use(slogecho.New(log))

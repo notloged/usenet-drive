@@ -37,7 +37,7 @@ export default function JobsTable({ data, hasActions, onPageChange }: JobsTableP
         onCancel: () => { },
         onConfirm: async () => {
             try {
-                const res = await fetch(`/api/v1/${status}jobs/${id}`, { method: "DELETE" });
+                const res = await fetch(`/api/v1/jobs/${status}/${id}`, { method: "DELETE" });
                 if (!res.ok) {
                     throw new Error(`Error deleting job ${id}.`);
                 }
@@ -61,7 +61,7 @@ export default function JobsTable({ data, hasActions, onPageChange }: JobsTableP
         onCancel: () => { },
         onConfirm: async () => {
             try {
-                const res = await fetch(`/api/v1/jobs/${id}/retry`, { method: "PUT" });
+                const res = await fetch(`/api/v1/jobs/failed/${id}/retry`, { method: "PUT" });
                 if (!res.ok) {
                     throw new Error(`Error retrying job ${id}.`);
                 }
