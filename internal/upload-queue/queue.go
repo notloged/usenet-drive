@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/javi11/usenet-drive/internal/uploader"
+	"github.com/javi11/usenet-drive/internal/utils"
 	sqllitequeue "github.com/javi11/usenet-drive/pkg/sqllite-queue"
 )
 
@@ -18,20 +20,24 @@ type UploadQueue interface {
 	Start(ctx context.Context, interval time.Duration)
 	AddJob(ctx context.Context, filePath string) error
 	ProcessJob(ctx context.Context, job sqllitequeue.Job) error
-	GetFailedJobs(ctx context.Context) ([]sqllitequeue.Job, error)
-	GetPendingJobs(ctx context.Context) ([]sqllitequeue.Job, error)
+	GetFailedJobs(ctx context.Context, limit, offset int) (sqllitequeue.Result, error)
+	GetPendingJobs(ctx context.Context, limit, offset int) (sqllitequeue.Result, error)
 	DeleteFailedJob(ctx context.Context, id int64) error
+	DeletePendingJob(ctx context.Context, id int64) error
 	RetryJob(ctx context.Context, id int64) error
+	Close(ctx context.Context) error
+	GetJobsInProgress() []sqllitequeue.Job
 }
 
 type uploadQueue struct {
 	engine           sqllitequeue.SqlQueue
 	uploader         uploader.Uploader
-	activeUploads    int
+	activeJobs       map[int64]sqllitequeue.Job
 	maxActiveUploads int
 	log              *slog.Logger
-	mx               *sync.Mutex
+	mx               *sync.RWMutex
 	closed           bool
+	fileWhitelist    []string
 }
 
 func NewUploadQueue(options ...Option) UploadQueue {
@@ -41,12 +47,14 @@ func NewUploadQueue(options ...Option) UploadQueue {
 	}
 
 	return &uploadQueue{
-		engine:           config.SqlLiteEngine,
-		uploader:         config.Uploader,
-		maxActiveUploads: config.MaxActiveUploads,
-		log:              config.Log,
-		mx:               &sync.Mutex{},
+		engine:           config.sqlLiteEngine,
+		uploader:         config.uploader,
+		maxActiveUploads: config.maxActiveUploads,
+		log:              config.log,
+		mx:               &sync.RWMutex{},
 		closed:           false,
+		activeJobs:       make(map[int64]sqllitequeue.Job, 0),
+		fileWhitelist:    config.fileWhitelist,
 	}
 }
 
@@ -57,6 +65,53 @@ func (q *uploadQueue) AddJob(ctx context.Context, filePath string) error {
 
 func (q *uploadQueue) ProcessJob(ctx context.Context, job sqllitequeue.Job) error {
 	log := q.log.With("job_id", job.ID).With("file_path", job.Data)
+
+	q.log.InfoContext(ctx, "Adding file(s) to upload queue...")
+
+	// Check if filePath is a directory
+	fileInfo, err := os.Stat(job.Data)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Corrupted files
+			log.ErrorContext(ctx, "File does not exist, removing job...")
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+
+	if fileInfo.IsDir() {
+		q.log.InfoContext(ctx, "File is a directory, adding all files to upload queue...")
+		// Walk through the directory and add all files to the queue
+		err = filepath.Walk(job.Data, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			// Check if the file is allowed
+			if !utils.HasAllowedExtension(info.Name(), q.fileWhitelist) {
+				q.log.InfoContext(ctx, fmt.Sprintf("File %s ignored, extension not allowed", path))
+				return nil
+			}
+
+			// Add the file to the queue
+			err = q.engine.Enqueue(ctx, path)
+			if err != nil {
+				return err
+			}
+
+			q.log.InfoContext(ctx, fmt.Sprintf("Added file %s to upload queue", path))
+			return nil
+		})
+
+		if err != nil {
+			log.ErrorContext(ctx, "Error adding the directory files...", "err", err)
+			return err
+		}
+
+		return nil
+	}
 
 	log.InfoContext(ctx, "Uploading file...")
 
@@ -106,8 +161,16 @@ func (q *uploadQueue) Start(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if q.activeUploads < q.maxActiveUploads {
-				jobs, err := q.engine.Dequeue(ctx, q.maxActiveUploads-q.activeUploads)
+			q.mx.RLock()
+			if q.closed {
+				q.mx.RLocker()
+				return
+			}
+			q.mx.RUnlock()
+
+			inProgress := len(q.activeJobs)
+			if inProgress < q.maxActiveUploads {
+				jobs, err := q.engine.Dequeue(ctx, q.maxActiveUploads-inProgress)
 				if err != nil {
 					q.log.InfoContext(ctx, "Failed to dequeue jobs", "err", err)
 					continue
@@ -122,14 +185,14 @@ func (q *uploadQueue) Start(ctx context.Context, interval time.Duration) {
 
 				for _, job := range jobs {
 					q.mx.Lock()
-					q.activeUploads++
+					q.activeJobs[job.ID] = job
 					q.mx.Unlock()
 					job := job
 
 					merr.Go(func() error {
 						defer func() {
 							q.mx.Lock()
-							q.activeUploads--
+							delete(q.activeJobs, job.ID)
 							q.mx.Unlock()
 						}()
 						return q.ProcessJob(ctx, job)
@@ -145,16 +208,28 @@ func (q *uploadQueue) Start(ctx context.Context, interval time.Duration) {
 	}
 }
 
-func (q *uploadQueue) GetFailedJobs(ctx context.Context) ([]sqllitequeue.Job, error) {
-	return q.engine.GetFailedJobs(ctx)
+func (q *uploadQueue) GetFailedJobs(ctx context.Context, limit, offset int) (sqllitequeue.Result, error) {
+	return q.engine.GetFailedJobs(ctx, limit, offset)
 }
 
-func (q *uploadQueue) GetPendingJobs(ctx context.Context) ([]sqllitequeue.Job, error) {
-	return q.engine.GetPendingJobs(ctx)
+func (q *uploadQueue) GetPendingJobs(ctx context.Context, limit, offset int) (sqllitequeue.Result, error) {
+	return q.engine.GetPendingJobs(ctx, limit, offset)
 }
 
 func (q *uploadQueue) DeleteFailedJob(ctx context.Context, id int64) error {
 	err := q.engine.DeleteFailedJob(ctx, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ErrJobNotFound
+		}
+		return err
+	}
+
+	return nil
+}
+
+func (q *uploadQueue) DeletePendingJob(ctx context.Context, id int64) error {
+	err := q.engine.DeletePendingJob(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return ErrJobNotFound
@@ -177,6 +252,37 @@ func (q *uploadQueue) RetryJob(ctx context.Context, id int64) error {
 	err = q.engine.Enqueue(ctx, job.Data)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (q *uploadQueue) GetJobsInProgress() []sqllitequeue.Job {
+	jobs := make([]sqllitequeue.Job, 0, len(q.activeJobs))
+	for _, job := range q.activeJobs {
+		jobs = append(jobs, job)
+	}
+
+	return jobs
+}
+
+func (q *uploadQueue) Close(ctx context.Context) error {
+	q.mx.Lock()
+	defer q.mx.Unlock()
+
+	if q.closed {
+		return nil
+	}
+
+	q.closed = true
+
+	// Mark all active jobs as failed with an error of closed
+	for _, job := range q.activeJobs {
+		job.Error = "upload failed: queue closed"
+		err := q.engine.PushToFailedQueue(ctx, job.Data, "upload failed: queue closed")
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -13,17 +13,25 @@ type SqlQueue interface {
 	Dequeue(ctx context.Context, limit int) ([]Job, error)
 	Delete(ctx context.Context, id int64) error
 	PushToFailedQueue(ctx context.Context, data string, error string) error
-	GetFailedJobs(ctx context.Context) ([]Job, error)
+	GetFailedJobs(ctx context.Context, limit, offset int) (Result, error)
 	DeleteFailedJob(ctx context.Context, id int64) error
-	GetPendingJobs(ctx context.Context) ([]Job, error)
+	GetPendingJobs(ctx context.Context, limit, offset int) (Result, error)
 	DequeueFailedJobById(ctx context.Context, id int64) (Job, error)
+	DeletePendingJob(ctx context.Context, id int64) error
+}
+
+type Result struct {
+	Entries    []Job `json:"entries"`
+	TotalCount int   `json:"total_count"`
+	Offset     int   `json:"offset"`
+	Limit      int   `json:"limit"`
 }
 
 type Job struct {
-	ID        int64
-	Data      string
-	CreatedAt time.Time
-	Error     string
+	ID        int64     `json:"id"`
+	Data      string    `json:"data"`
+	CreatedAt time.Time `json:"created_at"`
+	Error     string    `json:"error,omitempty"`
 }
 
 type sQLiteQueue struct {
@@ -34,12 +42,12 @@ func NewSQLiteQueue(db *sql.DB) (SqlQueue, error) {
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS queue (
 			id INTEGER PRIMARY KEY,
-			data TEXT,
+			data TEXT UNIQUE,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE TABLE IF NOT EXISTS failed_queue (
 			id INTEGER PRIMARY KEY,
-			data TEXT,
+			data TEXT UNIQUE,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			error TEXT
 		);
@@ -191,15 +199,25 @@ func (q *sQLiteQueue) PushToFailedQueue(ctx context.Context, data string, error 
 	return nil
 }
 
-func (q *sQLiteQueue) GetFailedJobs(ctx context.Context) ([]Job, error) {
+func (q *sQLiteQueue) GetFailedJobs(ctx context.Context, limit, offset int) (Result, error) {
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 
-	rows, err := tx.QueryContext(ctx, "SELECT id, data, created_at, error FROM failed_queue ORDER BY created_at ASC")
+	// Get the total count of items in the failed_queue table
+	var totalCount int
+	err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM failed_queue").Scan(&totalCount)
 	if err != nil {
-		return nil, err
+		return Result{}, err
+	}
+
+	rows, err := tx.QueryContext(
+		ctx,
+		fmt.Sprintf("SELECT id, data, created_at, error FROM failed_queue ORDER BY created_at ASC LIMIT %v OFFSET %v", limit, offset),
+	)
+	if err != nil {
+		return Result{}, err
 	}
 	defer rows.Close()
 
@@ -211,7 +229,7 @@ func (q *sQLiteQueue) GetFailedJobs(ctx context.Context) ([]Job, error) {
 		var error string
 		err = rows.Scan(&id, &data, &createdAt, &error)
 		if err != nil {
-			return nil, err
+			return Result{}, err
 		}
 
 		jobs = append(jobs, Job{
@@ -224,10 +242,15 @@ func (q *sQLiteQueue) GetFailedJobs(ctx context.Context) ([]Job, error) {
 
 	err = tx.Commit()
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 
-	return jobs, nil
+	return Result{
+		Entries:    jobs,
+		TotalCount: totalCount,
+		Offset:     offset,
+		Limit:      limit,
+	}, nil
 }
 
 func (q *sQLiteQueue) DeleteFailedJob(ctx context.Context, id int64) error {
@@ -249,15 +272,44 @@ func (q *sQLiteQueue) DeleteFailedJob(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (q *sQLiteQueue) GetPendingJobs(ctx context.Context) ([]Job, error) {
+func (q *sQLiteQueue) DeletePendingJob(ctx context.Context, id int64) error {
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	rows, err := tx.QueryContext(ctx, "SELECT id, data, created_at FROM queue ORDER BY created_at ASC")
+	_, err = tx.ExecContext(ctx, "DELETE FROM queue WHERE id = ?", id)
 	if err != nil {
-		return nil, err
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (q *sQLiteQueue) GetPendingJobs(ctx context.Context, limit, offset int) (Result, error) {
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Result{}, err
+	}
+
+	// Get the total count of items in the failed_queue table
+	var totalCount int
+	err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM queue").Scan(&totalCount)
+	if err != nil {
+		return Result{}, err
+	}
+
+	rows, err := tx.QueryContext(
+		ctx,
+		fmt.Sprintf("SELECT id, data, created_at FROM queue ORDER BY created_at ASC LIMIT %v OFFSET %v", limit, offset),
+	)
+	if err != nil {
+		return Result{}, err
 	}
 	defer rows.Close()
 
@@ -268,7 +320,7 @@ func (q *sQLiteQueue) GetPendingJobs(ctx context.Context) ([]Job, error) {
 		var createdAt time.Time
 		err = rows.Scan(&id, &data, &createdAt)
 		if err != nil {
-			return nil, err
+			return Result{}, err
 		}
 
 		jobs = append(jobs, Job{
@@ -280,8 +332,13 @@ func (q *sQLiteQueue) GetPendingJobs(ctx context.Context) ([]Job, error) {
 
 	err = tx.Commit()
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 
-	return jobs, nil
+	return Result{
+		Entries:    jobs,
+		TotalCount: totalCount,
+		Offset:     offset,
+		Limit:      limit,
+	}, nil
 }

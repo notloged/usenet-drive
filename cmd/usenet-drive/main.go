@@ -8,8 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/javi11/usenet-drive/internal/api"
+	adminpanel "github.com/javi11/usenet-drive/internal/admin-panel"
 	"github.com/javi11/usenet-drive/internal/config"
+	serverinfo "github.com/javi11/usenet-drive/internal/server-info"
 	uploadqueue "github.com/javi11/usenet-drive/internal/upload-queue"
 	"github.com/javi11/usenet-drive/internal/uploader"
 	"github.com/javi11/usenet-drive/internal/usenet"
@@ -22,7 +23,6 @@ import (
 )
 
 var configFile string
-var logPath string
 
 var rootCmd = &cobra.Command{
 	Use:   "usenet-drive",
@@ -106,13 +106,18 @@ var rootCmd = &cobra.Command{
 			uploadqueue.WithUploader(u),
 			uploadqueue.WithMaxActiveUploads(config.Usenet.Upload.MaxActiveUploads),
 			uploadqueue.WithLogger(log),
+			uploadqueue.WithFileWhitelist(config.Usenet.Upload.FileWhitelist),
 		)
+		defer uploaderQueue.Close(ctx)
 
 		// Start uploader queue
 		go uploaderQueue.Start(ctx, time.Duration(config.Usenet.Upload.UploadIntervalInSeconds*float64(time.Second)))
 
-		api := api.NewApi(uploaderQueue, log)
-		go api.Start(ctx, config.ApiPort)
+		// Server info
+		serverInfo := serverinfo.NewServerInfo(downloadConnPool, config.NzbPath)
+
+		adminPanel := adminpanel.New(uploaderQueue, serverInfo, log)
+		go adminPanel.Start(ctx, config.ApiPort)
 
 		nzbLoader, err := usenet.NewNzbLoader(config.NzbCacheSize)
 		if err != nil {
