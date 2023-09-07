@@ -27,6 +27,7 @@ type uploader struct {
 	scriptPath string
 	commonArgs []string
 	log        *slog.Logger
+	groups     []string
 }
 
 func NewUploader(options ...Option) (*uploader, error) {
@@ -39,7 +40,6 @@ func NewUploader(options ...Option) (*uploader, error) {
 		fmt.Sprintf("--host=%s", config.host),
 		fmt.Sprintf("--user=%s", config.username),
 		fmt.Sprintf("--password=%s", config.password),
-		fmt.Sprintf("--groups=%s", config.getGroups()),
 		fmt.Sprintf("--article-size=%v", config.articleSize),
 		fmt.Sprintf("--port=%v", config.port),
 		fmt.Sprintf("--connections=%v", config.maxConnections),
@@ -56,6 +56,7 @@ func NewUploader(options ...Option) (*uploader, error) {
 		scriptPath: config.nyuuPath,
 		commonArgs: args,
 		log:        config.log,
+		groups:     config.groups,
 	}, nil
 }
 
@@ -81,9 +82,13 @@ func (u *uploader) UploadFile(ctx context.Context, path string) (string, error) 
 		),
 	)
 
+	// Just upload to one group to prevent bans
+	randomGroup := u.groups[rand.Intn(len(u.groups))]
+
 	args := append(
 		u.commonArgs,
 		fmt.Sprintf("--filename=%s", fileName),
+		fmt.Sprintf("--groups=%s", randomGroup),
 		fmt.Sprintf("-M file_size: %d", fileInfo.Size()),
 		fmt.Sprintf("-M file_name: %s", fileInfo.Name()),
 		fmt.Sprintf("-M file_extension: %s", filepath.Ext(fileInfo.Name())),
