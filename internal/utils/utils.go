@@ -10,19 +10,18 @@ func ReplaceFileExtension(name string, extension string) string {
 	return strings.TrimSuffix(name, ext) + extension
 }
 
-func TruncateFileName(name string, length int) string {
+func TruncateFileName(name string, extension string, length int) string {
 	if len(name) <= length {
 		return name
 	}
 
-	ext := filepath.Ext(name)
-	name = strings.TrimSuffix(name, ext)
+	name = strings.TrimSuffix(name, extension)
 
 	if len(name) <= length {
-		return name + ext
+		return name + extension
 	}
 
-	return name[:length] + ext
+	return name[:length] + extension
 }
 
 func HasAllowedExtension(path string, extensions []string) bool {
