@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
-      - run: cd ./web && npm i
+      - run: cd ./web && npm i && npm run build
       - run: cd ..
       - name: Create binary release
         uses: wangyoucao577/go-release-action@v1
