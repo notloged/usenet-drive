@@ -29,7 +29,7 @@ jobs:
           binary_name: 'usenet-drive'
           build_command: 'make build'
           extra_files: README.md
-          project_path: './cmd/usenet-drive'
+          project_path: './'
   release-docker:
     name: Release Docker Image
     runs-on: ubuntu-latest
