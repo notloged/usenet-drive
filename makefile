@@ -4,7 +4,7 @@ VERSION := $(shell git rev-parse --short HEAD)
 WEB_DIR = ./web
 .PHONY: web-build
 web-build:
-	cd $(WEB_DIR) && npm run build
+	cd $(WEB_DIR) && npm i && npm run build
 	
 BUILD_OUPUT = ./bin/
 .PHONY: build
