@@ -1,4 +1,5 @@
-nzb_path: /nzbs
+root_path: /nzbs
+tmp_path: /tmp-files
 webdav_port: 8080
 api_port: 8081
 db_path: /config/usenet-drive.db
