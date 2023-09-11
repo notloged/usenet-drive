@@ -67,7 +67,10 @@ export default function JobsTable({ data, onPageChange, onDelete, onRetry, onOpe
                 </thead>
                 <tbody>{rows}</tbody>
             </Table>
-            {!!onPageChange ?? <Pagination total={totalPages} onChange={onPageChange} />}
+            {onPageChange && <Pagination total={totalPages} onChange={onPageChange} />}
+            <Text mt="md" size="sm" color="dimmed">
+                Showing {data.entries.length} of {data.total_count} jobs
+            </Text>
         </ScrollArea>
     );
 }
