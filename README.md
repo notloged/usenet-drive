@@ -27,6 +27,17 @@ Add a new webdav remote with the following parameters:
 - **Name**: `usenet`
 - **URL**: `http://localhost:8080`
 
+### It's hight recommended to use an rclone crypt remote to encrypt your data since this tool just obfuscate the file names.
+
+Add a new crypt remote with the following parameters:
+
+- **Name**: `usenet-crypt`
+- **Storage provider**: `Crypt`
+- **Encrypt the filenames**: `off`
+- **Option directory_name_encryption**: `Don't encrypt directory names, leave them intact`
+
+```bash
+
 ### Mount the remote
 
 ```bash
