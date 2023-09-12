@@ -34,7 +34,7 @@ func NewServer(options ...Option) (*webdavServer, error) {
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
 			if err != nil {
-				config.log.ErrorContext(r.Context(), "WebDav error", "err", err)
+				config.log.DebugContext(r.Context(), "WebDav error", "err", err)
 			}
 		},
 	}
