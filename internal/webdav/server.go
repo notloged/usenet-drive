@@ -32,6 +32,11 @@ func NewServer(options ...Option) (*webdavServer, error) {
 			config.nzbLoader,
 		),
 		LockSystem: webdav.NewMemLS(),
+		Logger: func(r *http.Request, err error) {
+			if err != nil {
+				config.log.ErrorContext(r.Context(), "WebDav error", "err", err)
+			}
+		},
 	}
 
 	return &webdavServer{
