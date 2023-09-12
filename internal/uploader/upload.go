@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/go-faker/faker/v4"
 	"github.com/javi11/usenet-drive/internal/utils"
 )
 
@@ -159,20 +160,10 @@ func (u *uploader) UploadFile(ctx context.Context, path string) (string, error) 
 }
 
 func (u *uploader) generateFrom() string {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	email := faker.Email()
+	username := faker.Username()
 
-	// List of possible usernames and hosts
-	usernames := []string{"john", "jane", "bob", "alice"}
-	hosts := []string{"gmail.com", "yahoo.com", "hotmail.com"}
-
-	// Generate random username and host
-	username := usernames[r.Intn(len(usernames))]
-	host := hosts[r.Intn(len(hosts))]
-
-	// Format string
-	randomString := fmt.Sprintf("%s <%s@%s>", username, username, host)
-
-	return randomString
+	return fmt.Sprintf("%s <%s>", username, email)
 }
 
 func (u *uploader) generateHashName(fileName string) (string, error) {
