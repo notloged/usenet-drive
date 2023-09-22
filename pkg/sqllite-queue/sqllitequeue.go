@@ -88,12 +88,7 @@ func (q *sQLiteQueue) Dequeue(ctx context.Context, limit int) ([]Job, error) {
 		return nil, errors.New("limit must be greater than 0")
 	}
 
-	tx, err := q.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT id, data, created_at FROM queue ORDER BY created_at ASC LIMIT %v", limit))
+	rows, err := q.db.QueryContext(ctx, fmt.Sprintf("SELECT id, data, created_at FROM queue ORDER BY created_at ASC LIMIT %v", limit))
 	if err != nil {
 		return nil, err
 	}
@@ -115,15 +110,10 @@ func (q *sQLiteQueue) Dequeue(ctx context.Context, limit int) ([]Job, error) {
 			CreatedAt: createdAt,
 		})
 
-		_, err := tx.ExecContext(ctx, "DELETE FROM queue WHERE id = ?", id)
+		_, err := q.db.ExecContext(ctx, "DELETE FROM queue WHERE id = ?", id)
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return nil, err
 	}
 
 	return jobs, nil
@@ -200,19 +190,14 @@ func (q *sQLiteQueue) MarkJobAsFailed(ctx context.Context, job Job, error string
 }
 
 func (q *sQLiteQueue) GetFailedJobs(ctx context.Context, limit, offset int) (Result, error) {
-	tx, err := q.db.BeginTx(ctx, nil)
-	if err != nil {
-		return Result{}, err
-	}
-
 	// Get the total count of items in the failed_queue table
 	var totalCount int
-	err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM failed_queue").Scan(&totalCount)
+	err := q.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM failed_queue").Scan(&totalCount)
 	if err != nil {
 		return Result{}, err
 	}
 
-	rows, err := tx.QueryContext(
+	rows, err := q.db.QueryContext(
 		ctx,
 		fmt.Sprintf("SELECT id, data, created_at, error FROM failed_queue ORDER BY created_at ASC LIMIT %v OFFSET %v", limit, offset),
 	)
@@ -238,11 +223,6 @@ func (q *sQLiteQueue) GetFailedJobs(ctx context.Context, limit, offset int) (Res
 			CreatedAt: createdAt,
 			Error:     error,
 		})
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return Result{}, err
 	}
 
 	return Result{
@@ -292,19 +272,14 @@ func (q *sQLiteQueue) DeletePendingJob(ctx context.Context, id int64) error {
 }
 
 func (q *sQLiteQueue) GetPendingJobs(ctx context.Context, limit, offset int) (Result, error) {
-	tx, err := q.db.BeginTx(ctx, nil)
-	if err != nil {
-		return Result{}, err
-	}
-
 	// Get the total count of items in the failed_queue table
 	var totalCount int
-	err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM queue").Scan(&totalCount)
+	err := q.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM queue").Scan(&totalCount)
 	if err != nil {
 		return Result{}, err
 	}
 
-	rows, err := tx.QueryContext(
+	rows, err := q.db.QueryContext(
 		ctx,
 		fmt.Sprintf("SELECT id, data, created_at FROM queue ORDER BY created_at ASC LIMIT %v OFFSET %v", limit, offset),
 	)
@@ -328,11 +303,6 @@ func (q *sQLiteQueue) GetPendingJobs(ctx context.Context, limit, offset int) (Re
 			Data:      data,
 			CreatedAt: createdAt,
 		})
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return Result{}, err
 	}
 
 	return Result{
