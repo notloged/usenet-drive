@@ -76,7 +76,14 @@ var rootCmd = &cobra.Command{
 
 		// Create uploader
 		u, err := uploader.NewUploader(
-			uploader.WithProviders(config.Usenet.Upload.Providers),
+			uploader.WithHost(config.Usenet.Upload.Provider.Host),
+			uploader.WithPort(config.Usenet.Upload.Provider.Port),
+			uploader.WithUsername(config.Usenet.Upload.Provider.Username),
+			uploader.WithPassword(config.Usenet.Upload.Provider.Password),
+			uploader.WithSSL(config.Usenet.Upload.Provider.SSL),
+			uploader.WithNyuuPath(config.Usenet.Upload.NyuuPath),
+			uploader.WithGroups(config.Usenet.Upload.Provider.Groups),
+			uploader.WithMaxConnections(config.Usenet.Upload.Provider.MaxConnections),
 			uploader.WithLogger(log),
 			uploader.WithDryRun(config.Usenet.Upload.DryRun),
 		)
@@ -101,7 +108,7 @@ var rootCmd = &cobra.Command{
 		uploaderQueue := uploadqueue.NewUploadQueue(
 			uploadqueue.WithQueueEngine(sqlLiteEngine),
 			uploadqueue.WithUploader(u),
-			uploadqueue.WithMaxActiveUploads(len(config.Usenet.Upload.Providers)),
+			uploadqueue.WithMaxActiveUploads(1),
 			uploadqueue.WithLogger(log),
 			uploadqueue.WithFileAllowlist(config.Usenet.Upload.FileAllowlist),
 		)
