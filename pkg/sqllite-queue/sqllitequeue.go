@@ -60,22 +60,13 @@ func NewSQLiteQueue(db *sql.DB) (SqlQueue, error) {
 }
 
 func (q *sQLiteQueue) Enqueue(ctx context.Context, data string) error {
-	tx, err := q.db.BeginTx(ctx, nil)
+	stmt, err := q.db.PrepareContext(ctx, "INSERT INTO queue (data) VALUES (?)")
 	if err != nil {
 		return err
 	}
-
-	stmt, err := tx.PrepareContext(ctx, "INSERT INTO queue (data) VALUES (?)")
-	if err != nil {
-		return err
-	}
+	defer stmt.Close()
 
 	_, err = stmt.ExecContext(ctx, data)
-	if err != nil {
-		return err
-	}
-
-	err = tx.Commit()
 	if err != nil {
 		return err
 	}
@@ -88,8 +79,14 @@ func (q *sQLiteQueue) Dequeue(ctx context.Context, limit int) ([]Job, error) {
 		return nil, errors.New("limit must be greater than 0")
 	}
 
-	rows, err := q.db.QueryContext(ctx, fmt.Sprintf("SELECT id, data, created_at FROM queue ORDER BY created_at ASC LIMIT %v", limit))
+	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
+		return []Job{}, err
+	}
+
+	rows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT id, data, created_at FROM queue ORDER BY created_at ASC LIMIT %v", limit))
+	if err != nil {
+		tx.Commit()
 		return nil, err
 	}
 	defer rows.Close()
@@ -110,10 +107,16 @@ func (q *sQLiteQueue) Dequeue(ctx context.Context, limit int) ([]Job, error) {
 			CreatedAt: createdAt,
 		})
 
-		_, err := q.db.ExecContext(ctx, "DELETE FROM queue WHERE id = ?", id)
+		_, err := tx.ExecContext(ctx, "DELETE FROM queue WHERE id = ?", id)
 		if err != nil {
+			tx.Rollback()
 			return nil, err
 		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return []Job{}, err
 	}
 
 	return jobs, nil
@@ -130,11 +133,13 @@ func (q *sQLiteQueue) PopFailedJob(ctx context.Context, id int64) (Job, error) {
 	var j Job
 	err = row.Scan(&j.ID, &j.Data, &j.CreatedAt, &j.Error)
 	if err != nil {
+		tx.Commit()
 		return Job{}, err
 	}
 
 	_, err = tx.ExecContext(ctx, "DELETE FROM failed_queue WHERE id = ?", id)
 	if err != nil {
+		tx.Rollback()
 		return Job{}, err
 	}
 
@@ -147,17 +152,7 @@ func (q *sQLiteQueue) PopFailedJob(ctx context.Context, id int64) (Job, error) {
 }
 
 func (q *sQLiteQueue) Delete(ctx context.Context, id int64) error {
-	tx, err := q.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, "DELETE FROM queue WHERE id = ?", id)
-	if err != nil {
-		return err
-	}
-
-	err = tx.Commit()
+	_, err := q.db.ExecContext(ctx, "DELETE FROM queue WHERE id = ?", id)
 	if err != nil {
 		return err
 	}
@@ -166,22 +161,13 @@ func (q *sQLiteQueue) Delete(ctx context.Context, id int64) error {
 }
 
 func (q *sQLiteQueue) MarkJobAsFailed(ctx context.Context, job Job, error string) error {
-	tx, err := q.db.BeginTx(ctx, nil)
+	stmt, err := q.db.PrepareContext(ctx, "INSERT INTO failed_queue (data, error) VALUES (?, ?)")
 	if err != nil {
 		return err
 	}
-
-	stmt, err := tx.PrepareContext(ctx, "INSERT INTO failed_queue (data, error) VALUES (?, ?)")
-	if err != nil {
-		return err
-	}
+	defer stmt.Close()
 
 	_, err = stmt.ExecContext(ctx, job.Data, error)
-	if err != nil {
-		return err
-	}
-
-	err = tx.Commit()
 	if err != nil {
 		return err
 	}
@@ -234,17 +220,7 @@ func (q *sQLiteQueue) GetFailedJobs(ctx context.Context, limit, offset int) (Res
 }
 
 func (q *sQLiteQueue) DeleteFailedJob(ctx context.Context, id int64) error {
-	tx, err := q.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, "DELETE FROM failed_queue WHERE id = ?", id)
-	if err != nil {
-		return err
-	}
-
-	err = tx.Commit()
+	_, err := q.db.ExecContext(ctx, "DELETE FROM failed_queue WHERE id = ?", id)
 	if err != nil {
 		return err
 	}
@@ -253,17 +229,7 @@ func (q *sQLiteQueue) DeleteFailedJob(ctx context.Context, id int64) error {
 }
 
 func (q *sQLiteQueue) DeletePendingJob(ctx context.Context, id int64) error {
-	tx, err := q.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, "DELETE FROM queue WHERE id = ?", id)
-	if err != nil {
-		return err
-	}
-
-	err = tx.Commit()
+	_, err := q.db.ExecContext(ctx, "DELETE FROM queue WHERE id = ?", id)
 	if err != nil {
 		return err
 	}

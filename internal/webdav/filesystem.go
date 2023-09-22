@@ -105,7 +105,11 @@ func (fs *nzbFilesystem) OpenFile(ctx context.Context, name string, flag int, pe
 				fs.log.ErrorContext(ctx, "Failed to create symlink", "err", err)
 			}
 
-			fs.queue.AddJob(ctx, name)
+			err = fs.queue.AddJob(ctx, name)
+			if err != nil {
+				fs.log.ErrorContext(ctx, "Failed to add job to queue", "err", err)
+			}
+
 			fs.refreshRcloneCache(ctx, name)
 		}
 		return OpenFile(tmpName, flag, perm, onClose, fs.log, fs.nzbLoader)

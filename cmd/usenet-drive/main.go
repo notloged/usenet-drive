@@ -107,9 +107,6 @@ var rootCmd = &cobra.Command{
 		)
 		defer uploaderQueue.Close(ctx)
 
-		// Start uploader queue
-		go uploaderQueue.Start(ctx, time.Duration(config.Usenet.Upload.UploadIntervalInSeconds*float64(time.Second)))
-
 		// Server info
 		serverInfo := serverinfo.NewServerInfo(downloadConnPool, config.RootPath, config.TmpPath)
 
@@ -152,6 +149,9 @@ var rootCmd = &cobra.Command{
 			log.ErrorContext(ctx, "Failed to create WebDAV server: %v", err)
 			os.Exit(1)
 		}
+
+		// Start uploader queue
+		go uploaderQueue.Start(ctx, time.Duration(config.Usenet.Upload.UploadIntervalInSeconds*float64(time.Second)))
 
 		// Start webdav server
 		webdav.Start(ctx, config.WebDavPort)

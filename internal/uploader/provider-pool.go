@@ -37,8 +37,8 @@ func newProviderPool(providers []config.UsenetProvider) (*providerPool, error) {
 	close := func(v interface{}) error {
 		p.mx.Lock()
 		defer p.mx.Unlock()
-		provider := v.(*config.UsenetProvider)
-		p.providers = append(p.providers, *provider)
+		provider := v.(config.UsenetProvider)
+		p.providers = append(p.providers, provider)
 		return nil
 	}
 
@@ -76,5 +76,5 @@ func (p *providerPool) Get() (*config.UsenetProvider, error) {
 }
 
 func (p *providerPool) Release(provider *config.UsenetProvider) {
-	p.pool.Put(provider)
+	p.pool.Put(&provider)
 }
