@@ -1,16 +1,15 @@
-package webdav
+package usenetfilereader
 
 import (
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/javi11/usenet-drive/internal/usenet"
-	"github.com/javi11/usenet-drive/internal/utils"
+	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
 )
 
 type nzbFileInfo struct {
@@ -19,7 +18,7 @@ type nzbFileInfo struct {
 	originalFileMetadata usenet.Metadata
 }
 
-func NewNZBFileInfo(name string, realName string, log *slog.Logger, nzbLoader *usenet.NzbLoader) (fs.FileInfo, error) {
+func NewFileInfo(name string, log *slog.Logger, nzbLoader *nzbloader.NzbLoader) (fs.FileInfo, error) {
 	var nzbFileStat os.FileInfo
 	var metadata usenet.Metadata
 	var eg multierror.Group
@@ -50,20 +49,16 @@ func NewNZBFileInfo(name string, realName string, log *slog.Logger, nzbLoader *u
 		return nil, os.ErrNotExist
 	}
 
-	if !isNzbFile(realName) && filepath.Ext(realName) != metadata.FileExtension {
-		return os.Stat(realName)
-	}
-
 	fileName := nzbFileStat.Name()
 
 	return &nzbFileInfo{
 		nzbFileStat:          nzbFileStat,
 		originalFileMetadata: metadata,
-		name:                 utils.ReplaceFileExtension(fileName, metadata.FileExtension),
+		name:                 usenet.ReplaceFileExtension(fileName, metadata.FileExtension),
 	}, nil
 }
 
-func NewNZBFileInfoWithMetadata(metadata usenet.Metadata, name string) (fs.FileInfo, error) {
+func NeFileInfoWithMetadata(metadata usenet.Metadata, name string) (fs.FileInfo, error) {
 	info, err := os.Stat(name)
 	if err != nil {
 		return nil, err
@@ -74,7 +69,7 @@ func NewNZBFileInfoWithMetadata(metadata usenet.Metadata, name string) (fs.FileI
 	return &nzbFileInfo{
 		nzbFileStat:          info,
 		originalFileMetadata: metadata,
-		name:                 utils.ReplaceFileExtension(fileName, metadata.FileExtension),
+		name:                 usenet.ReplaceFileExtension(fileName, metadata.FileExtension),
 	}, nil
 }
 

@@ -1,6 +1,11 @@
 package usenet
 
-import "github.com/chrisfarms/nntp"
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/chrisfarms/nntp"
+)
 
 func FindGroup(c *nntp.Conn, groups []string) error {
 	var err error
@@ -11,4 +16,9 @@ func FindGroup(c *nntp.Conn, groups []string) error {
 		}
 	}
 	return err
+}
+
+func ReplaceFileExtension(name string, extension string) string {
+	ext := filepath.Ext(name)
+	return strings.TrimSuffix(name, ext) + extension
 }

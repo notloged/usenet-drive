@@ -1,4 +1,4 @@
-package webdav
+package usenetfilereader
 
 import (
 	"errors"
@@ -8,10 +8,11 @@ import (
 	"os"
 	"sync"
 
-	"github.com/chrisfarms/nzb"
-	"github.com/chrisfarms/yenc"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/javi11/usenet-drive/internal/usenet"
+	connectionpool "github.com/javi11/usenet-drive/internal/usenet/connection-pool"
+	"github.com/javi11/usenet-drive/pkg/nzb"
+	"github.com/javi11/usenet-drive/pkg/yenc"
 )
 
 // Buffer is a usable block of data similar to a file
@@ -28,14 +29,14 @@ type Buf struct {
 	nzbFile            *nzb.NzbFile
 	ptr                int64
 	cache              *lru.Cache[string, *yenc.Part]
-	cp                 usenet.UsenetConnectionPool
+	cp                 connectionpool.UsenetConnectionPool
 	mx                 sync.RWMutex
 	chunkSize          int
 	maxDownloadRetries int
 }
 
 // NewBuffer creates a new data volume based on a buffer
-func NewBuffer(nzbFile *nzb.NzbFile, size int, chunkSize int, cp usenet.UsenetConnectionPool) (*Buf, error) {
+func NewBuffer(nzbFile *nzb.NzbFile, size int, chunkSize int, cp connectionpool.UsenetConnectionPool) (*Buf, error) {
 	// Article cache can not be too big since it is stored in memory
 	// With 100 the max memory used is 100 * 740kb = 74mb peer stream
 	// This is mainly used to not redownload the same article multiple times if was not already
@@ -105,7 +106,7 @@ func (v *Buf) Read(p []byte) (int, error) {
 	}
 
 	currentSegment := int(float64(v.ptr) / float64(v.chunkSize))
-	beginReadAt := Max((int(v.ptr) - (currentSegment * v.chunkSize)), 0)
+	beginReadAt := max((int(v.ptr) - (currentSegment * v.chunkSize)), 0)
 
 	for _, segment := range v.nzbFile.Segments[currentSegment:] {
 		if n >= len(p) {
@@ -139,7 +140,7 @@ func (v *Buf) ReadAt(p []byte, off int64) (int, error) {
 	}
 
 	currentSegment := int(float64(off) / float64(v.chunkSize))
-	beginReadAt := Max((int(off) - (currentSegment * v.chunkSize)), 0)
+	beginReadAt := max((int(off) - (currentSegment * v.chunkSize)), 0)
 
 	for _, segment := range v.nzbFile.Segments[currentSegment:] {
 		if n >= len(p) {

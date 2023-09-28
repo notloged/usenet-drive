@@ -1,17 +1,18 @@
-package usenet
+package nzbloader
 
 import (
 	"context"
 	"os"
 
-	"github.com/chrisfarms/nzb"
 	lru "github.com/hashicorp/golang-lru/v2"
-	corruptednzbsmanager "github.com/javi11/usenet-drive/internal/corrupted-nzbs-manager"
+	"github.com/javi11/usenet-drive/internal/usenet"
+	corruptednzbsmanager "github.com/javi11/usenet-drive/internal/usenet/corrupted-nzbs-manager"
+	"github.com/javi11/usenet-drive/pkg/nzb"
 )
 
 type nzbCache struct {
 	Nzb      *nzb.Nzb
-	Metadata Metadata
+	Metadata usenet.Metadata
 }
 
 type NzbLoader struct {
@@ -41,13 +42,13 @@ func (n *NzbLoader) LoadFromFile(name string) (*nzbCache, error) {
 		return nil, err
 	}
 
-	nzb, err := nzb.New(file)
+	nzb, err := nzb.NzbFromBuffer(file)
 	if err != nil {
 		if err = n.cNzb.Add(context.Background(), name, err.Error()); err != nil {
 			return nil, err
 		}
 	}
-	metadata, err := LoadMetadataFromNzb(nzb)
+	metadata, err := usenet.LoadMetadataFromNzb(nzb)
 	if err != nil {
 		if err = n.cNzb.Add(context.Background(), name, err.Error()); err != nil {
 			return nil, err
@@ -69,13 +70,13 @@ func (n *NzbLoader) LoadFromFileReader(f *os.File) (*nzbCache, error) {
 		return nzb, nil
 	}
 
-	nzb, err := nzb.New(f)
+	nzb, err := nzb.NzbFromBuffer(f)
 	if err != nil {
 		if err = n.cNzb.Add(context.Background(), f.Name(), err.Error()); err != nil {
 			return nil, err
 		}
 	}
-	metadata, err := LoadMetadataFromNzb(nzb)
+	metadata, err := usenet.LoadMetadataFromNzb(nzb)
 	if err != nil {
 		if err = n.cNzb.Add(context.Background(), f.Name(), err.Error()); err != nil {
 			return nil, err
@@ -101,7 +102,7 @@ func (n *NzbLoader) EvictFromCache(name string) bool {
 }
 
 func (n *NzbLoader) RefreshCachedNzb(name string, nzb *nzb.Nzb) (bool, error) {
-	metadata, err := LoadMetadataFromNzb(nzb)
+	metadata, err := usenet.LoadMetadataFromNzb(nzb)
 	if err != nil {
 		return false, err
 	}

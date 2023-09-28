@@ -9,24 +9,23 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/javi11/usenet-drive/internal/usenet"
 )
 
 type file struct {
-	innerFile *os.File
-	fsMutex   sync.RWMutex
-	onClose   func()
-	log       *slog.Logger
-	nzbLoader *usenet.NzbLoader
+	innerFile  *os.File
+	fsMutex    sync.RWMutex
+	fileReader RemoteFileReader
+	onClose    func() error
+	log        *slog.Logger
 }
 
 func OpenFile(
 	name string,
 	flag int,
 	perm fs.FileMode,
-	onClose func(),
+	onClose func() error,
 	log *slog.Logger,
-	nzbLoader *usenet.NzbLoader,
+	fileReader RemoteFileReader,
 ) (*file, error) {
 	f, err := os.OpenFile(name, flag, perm)
 	if err != nil {
@@ -34,10 +33,10 @@ func OpenFile(
 	}
 
 	return &file{
-		innerFile: f,
-		onClose:   onClose,
-		log:       log,
-		nzbLoader: nzbLoader,
+		innerFile:  f,
+		onClose:    onClose,
+		log:        log,
+		fileReader: fileReader,
 	}, nil
 }
 
@@ -60,7 +59,10 @@ func (f *file) Close() error {
 	}
 
 	if f.onClose != nil {
-		f.onClose()
+		err := f.onClose()
+		if err != nil {
+			return err
+		}
 	}
 
 	return err
@@ -97,29 +99,35 @@ func (f *file) Readdir(n int) ([]os.FileInfo, error) {
 	var merr multierror.Group
 
 	for i, info := range infos {
-		if isNzbFile(info.Name()) {
-			info := info
-			i := i
-			merr.Go(func() error {
-				n := filepath.Join(f.innerFile.Name(), info.Name())
-				infos[i], err = NewNZBFileInfo(
-					n,
-					n,
-					f.log,
-					f.nzbLoader,
-				)
-				if err != nil {
-					infos[i] = info
-					return err
-				}
-
+		merr.Go(func() error {
+			if info == nil {
 				return nil
-			})
-		}
+			}
+			ok, s, err := f.fileReader.Stat(filepath.Join(f.innerFile.Name(), info.Name()))
+			if err != nil {
+				return err
+			}
+
+			if ok {
+				infos[i] = s
+			}
+
+			return nil
+		})
 	}
 
 	if err := merr.Wait(); err != nil {
-		return removeNzb(infos), nil
+		f.log.Error("error reading remote directory", "error", err)
+
+		// Remove nulls from infos
+		var filteredInfos []os.FileInfo
+		for _, info := range infos {
+			if info != nil {
+				filteredInfos = append(filteredInfos, info)
+			}
+		}
+
+		return filteredInfos, nil
 	}
 
 	return infos, nil
@@ -160,35 +168,23 @@ func (f *file) Sync() error {
 }
 
 func (f *file) Truncate(size int64) error {
-	if isNzbFile(f.Name()) {
-		return os.ErrPermission
-	}
 	return f.innerFile.Truncate(size)
 }
 
 func (f *file) Write(b []byte) (int, error) {
 	f.fsMutex.Lock()
 	defer f.fsMutex.Unlock()
-	if isNzbFile(f.Name()) {
-		return 0, os.ErrPermission
-	}
 	return f.innerFile.Write(b)
 }
 
 func (f *file) WriteAt(b []byte, off int64) (int, error) {
 	f.fsMutex.Lock()
 	defer f.fsMutex.Unlock()
-	if isNzbFile(f.Name()) {
-		return 0, os.ErrPermission
-	}
 	return f.innerFile.WriteAt(b, off)
 }
 
 func (f *file) WriteString(s string) (int, error) {
 	f.fsMutex.Lock()
 	defer f.fsMutex.Unlock()
-	if isNzbFile(f.Name()) {
-		return 0, os.ErrPermission
-	}
 	return f.innerFile.WriteString(s)
 }

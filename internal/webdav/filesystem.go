@@ -5,54 +5,43 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
-	uploadqueue "github.com/javi11/usenet-drive/internal/upload-queue"
-	"github.com/javi11/usenet-drive/internal/usenet"
-	"github.com/javi11/usenet-drive/internal/utils"
 	rclonecli "github.com/javi11/usenet-drive/pkg/rclone-cli"
 	"golang.org/x/net/webdav"
 )
 
-type nzbFilesystem struct {
-	rootPath            string
-	tmpPath             string
-	cn                  usenet.UsenetConnectionPool
-	lock                sync.RWMutex
-	queue               uploadqueue.UploadQueue
-	log                 *slog.Logger
-	uploadFileAllowlist []string
-	nzbLoader           *usenet.NzbLoader
-	rcloneCli           rclonecli.RcloneRcClient
-	forceRefreshRclone  bool
+type remoteFilesystem struct {
+	rootPath           string
+	lock               sync.RWMutex
+	log                *slog.Logger
+	rcloneCli          rclonecli.RcloneRcClient
+	forceRefreshRclone bool
+	fileWriter         RemoteFileWriter
+	fileReader         RemoteFileReader
 }
 
-func NewNzbFilesystem(
+func NewRemoteFilesystem(
 	rootPath string,
-	tmpPath string,
-	cn usenet.UsenetConnectionPool,
-	queue uploadqueue.UploadQueue,
-	log *slog.Logger,
-	uploadFileAllowlist []string,
-	nzbLoader *usenet.NzbLoader,
+	fileWriter RemoteFileWriter,
+	fileReader RemoteFileReader,
 	rcloneCli rclonecli.RcloneRcClient,
 	forceRefreshRclone bool,
+	log *slog.Logger,
 ) webdav.FileSystem {
-	return &nzbFilesystem{
-		rootPath:            rootPath,
-		tmpPath:             tmpPath,
-		cn:                  cn,
-		queue:               queue,
-		log:                 log,
-		uploadFileAllowlist: uploadFileAllowlist,
-		nzbLoader:           nzbLoader,
-		rcloneCli:           rcloneCli,
-		forceRefreshRclone:  forceRefreshRclone,
+	return &remoteFilesystem{
+		rootPath:           rootPath,
+		log:                log,
+		fileWriter:         fileWriter,
+		fileReader:         fileReader,
+		forceRefreshRclone: forceRefreshRclone,
+		rcloneCli:          rcloneCli,
 	}
 }
 
-func (fs *nzbFilesystem) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
+func (fs *remoteFilesystem) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 	if name = fs.resolve(name); name == "" {
@@ -69,66 +58,59 @@ func (fs *nzbFilesystem) Mkdir(ctx context.Context, name string, perm os.FileMod
 	return nil
 }
 
-func (fs *nzbFilesystem) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
+func (fs *remoteFilesystem) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
 	fs.lock.RLock()
 	defer fs.lock.RUnlock()
 	if name = fs.resolve(name); name == "" {
 		return nil, os.ErrNotExist
 	}
 
-	if isNzbFile(name) {
-		// If file is a nzb file return a custom file that will mask the nzb
-		return OpenNzbFile(ctx, name, flag, perm, fs.cn, fs.log, fs.nzbLoader)
+	ok, f, err := fs.fileReader.OpenFile(ctx, name, flag, perm, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	originalName := getOriginalNzb(name)
-	if originalName != nil {
-		// If the file is a masked call the original nzb file
-		return OpenNzbFile(ctx, *originalName, flag, perm, fs.cn, fs.log, fs.nzbLoader)
+	if ok {
+		// Return the file in case it was found in the remote
+		return f, nil
 	}
 
-	onClose := func() {}
-	if flag == os.O_RDWR|os.O_CREATE|os.O_TRUNC && utils.HasAllowedExtension(name, fs.uploadFileAllowlist) {
-		tmpName := strings.Replace(name, fs.rootPath, fs.tmpPath, 1)
-		// Prepare directory on tmp folder
-		err := os.MkdirAll(filepath.Dir(tmpName), 0755)
+	onClose := func() error {
+		return nil
+	}
+	if flag == os.O_RDWR|os.O_CREATE|os.O_TRUNC && fs.fileWriter.HasAllowedFileExtension(name) {
+		// If the file is an allowed upload file, and was opened for writing, when close, add it to the upload queue
+		onClose = func() error {
+			fs.refreshRcloneCache(ctx, name)
+
+			return nil
+		}
+
+		finalSize, err := strconv.ParseInt(ctx.Value(reqContentLengthKey).(string), 10, 64)
 		if err != nil {
-			fs.log.ErrorContext(ctx, "Failed to create tmp folder", "err", err)
 			return nil, err
 		}
-		// If the file is an allowed upload file, and was opened for writing, when close, add it to the upload queue
-		onClose = func() {
-			// Create a symlink to the original file on the tmp folder
-			fs.log.DebugContext(ctx, "Creating symlink", "tmpName", tmpName, "name", name)
-			err := os.Symlink(tmpName, name)
-			if err != nil {
-				fs.log.ErrorContext(ctx, "Failed to create symlink", "err", err)
-			}
-
-			err = fs.queue.AddJob(ctx, name)
-			if err != nil {
-				fs.log.ErrorContext(ctx, "Failed to add job to queue", "err", err)
-			}
-
-			fs.refreshRcloneCache(ctx, name)
-		}
-		return OpenFile(tmpName, flag, perm, onClose, fs.log, fs.nzbLoader)
+		return fs.fileWriter.OpenFile(ctx, name, finalSize, flag, perm, onClose)
 	}
 
-	return OpenFile(name, flag, perm, onClose, fs.log, fs.nzbLoader)
+	return OpenFile(name, flag, perm, onClose, fs.log, fs.fileReader)
 }
 
-func (fs *nzbFilesystem) RemoveAll(ctx context.Context, name string) error {
+func (fs *remoteFilesystem) RemoveAll(ctx context.Context, name string) error {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 	if name = fs.resolve(name); name == "" {
 		return os.ErrNotExist
 	}
 
-	originalName := getOriginalNzb(name)
-	if originalName != nil {
-		// If the file is a masked call the original nzb file
-		name = *originalName
+	ok, err := fs.fileWriter.RemoveFile(ctx, name)
+	if err != nil {
+		return err
+	}
+
+	if ok {
+		fs.refreshRcloneCache(ctx, name)
+		return nil
 	}
 
 	if name == filepath.Clean(fs.rootPath) {
@@ -136,18 +118,17 @@ func (fs *nzbFilesystem) RemoveAll(ctx context.Context, name string) error {
 		return os.ErrInvalid
 	}
 
-	// Check if the file is a symlink
-	if link, err := os.Readlink(name); err == nil {
-		// If the file is a symlink, remove the original file
-		if err := os.RemoveAll(link); err != nil {
-			return err
-		}
+	err = os.RemoveAll(name)
+	if err != nil {
+		return err
 	}
 
-	return os.RemoveAll(name)
+	fs.refreshRcloneCache(ctx, name)
+
+	return nil
 }
 
-func (fs *nzbFilesystem) Rename(ctx context.Context, oldName, newName string) error {
+func (fs *remoteFilesystem) Rename(ctx context.Context, oldName, newName string) error {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 
@@ -158,41 +139,14 @@ func (fs *nzbFilesystem) Rename(ctx context.Context, oldName, newName string) er
 		return os.ErrNotExist
 	}
 
-	originalName := getOriginalNzb(oldName)
-	if originalName != nil {
-		// In case you want to update the file extension we need to update it in the original nzb file
-		if filepath.Ext(newName) != filepath.Ext(oldName) {
-			c, err := fs.nzbLoader.LoadFromFile(*originalName)
-			if err != nil {
-				return err
-			}
+	ok, err := fs.fileWriter.RenameFile(ctx, oldName, newName)
+	if err != nil {
+		return err
+	}
 
-			n := usenet.UpdateNzbMetadada(c.Nzb, usenet.UpdateableMetadata{
-				FileExtension: filepath.Ext(newName),
-			})
-			b, err := usenet.NzbToBytes(n)
-			if err != nil {
-				return err
-			}
-
-			err = os.WriteFile(*originalName, b, 0766)
-			if err != nil {
-				return err
-			}
-
-			// Refresh the cache
-			_, err = fs.nzbLoader.RefreshCachedNzb(*originalName, n)
-			if err != nil {
-				return err
-			}
-		}
-		// If the file is a masked call the original nzb file
-		oldName = *originalName
-		newName = utils.ReplaceFileExtension(newName, ".nzb")
-
-		if newName == oldName {
-			return nil
-		}
+	if ok {
+		fs.refreshRcloneCache(ctx, newName)
+		return nil
 	}
 
 	if root := filepath.Clean(fs.rootPath); root == oldName || root == newName {
@@ -200,7 +154,7 @@ func (fs *nzbFilesystem) Rename(ctx context.Context, oldName, newName string) er
 		return os.ErrInvalid
 	}
 
-	err := os.Rename(oldName, newName)
+	err = os.Rename(oldName, newName)
 	if err != nil {
 		return err
 	}
@@ -210,30 +164,27 @@ func (fs *nzbFilesystem) Rename(ctx context.Context, oldName, newName string) er
 	return nil
 }
 
-func (fs *nzbFilesystem) Stat(ctx context.Context, name string) (os.FileInfo, error) {
+func (fs *remoteFilesystem) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	fs.lock.RLock()
 	defer fs.lock.RUnlock()
 	if name = fs.resolve(name); name == "" {
-		// Filter metadata files
 		return nil, os.ErrNotExist
 	}
 
-	if isNzbFile(name) {
-		// If file is a nzb file return a custom file that will mask the nzb
-		return NewNZBFileInfo(name, name, fs.log, fs.nzbLoader)
+	ok, s, err := fs.fileReader.Stat(name)
+	if err != nil {
+		return nil, err
 	}
 
-	originalName := getOriginalNzb(name)
-	if originalName != nil {
-		// If the file is a masked call the original nzb file
-		return NewNZBFileInfo(*originalName, name, fs.log, fs.nzbLoader)
+	if ok {
+		// Return the remote file info if it exists
+		return s, nil
 	}
 
-	// Build a new os.FileInfo with a mix of nzbFileInfo and metadata
 	return os.Stat(name)
 }
 
-func (fs *nzbFilesystem) resolve(name string) string {
+func (fs *remoteFilesystem) resolve(name string) string {
 	// This implementation is based on Dir.Open's code in the standard net/http package.
 	if filepath.Separator != '/' && strings.ContainsRune(name, filepath.Separator) ||
 		strings.Contains(name, "\x00") {
@@ -246,7 +197,7 @@ func (fs *nzbFilesystem) resolve(name string) string {
 	return filepath.Join(dir, filepath.FromSlash(slashClean(name)))
 }
 
-func (fs *nzbFilesystem) refreshRcloneCache(ctx context.Context, name string) {
+func (fs *remoteFilesystem) refreshRcloneCache(ctx context.Context, name string) {
 	if fs.forceRefreshRclone {
 		mountDir := filepath.Dir(strings.Replace(name, fs.rootPath, "", 1))
 		if mountDir == "/" {
