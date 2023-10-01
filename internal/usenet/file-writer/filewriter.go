@@ -71,7 +71,7 @@ func (u *fileWriter) HasAllowedFileExtension(fileName string) bool {
 	}
 
 	for _, ext := range u.fileAllowlist {
-		if strings.HasSuffix(fileName, ext) {
+		if strings.HasSuffix(strings.ToLower(fileName), ext) {
 			return true
 		}
 	}
