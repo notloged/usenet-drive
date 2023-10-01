@@ -181,7 +181,7 @@ The `Upload` struct defines the Usenet provider for uploading.
 
 - `provider` (UsenetProvider): Usenet provider to upload files
 Alternatively, you can use the same provider and split the available connections to allow more parallel uploads.
-- `file_allow_list` ([]string): The list of allowed file extensions. For example, `[".mkv", ".mp4"]`, in this case only files with the extensions `.mkv` and `.mp4` will be uploaded to usenet. Take care not upload files that change frequently, like subtitules or text files, since they will be uploaded every time they change. In usenet you can not edit files.
+- `file_allow_list` ([]string): The list of allowed file extensions. For example, `[".mkv", ".mp4"]`, in this case only files with the extensions `.mkv` and `.mp4` will be uploaded to usenet. Take care not upload files that change frequently, like subtitules or text files, since they will be uploaded every time they change. In usenet you can not edit files. **_If using rclone crypt all file extensions will ends with .bin so in order to specify the real extension, you must add .bin at the end. Ex: .mkv.bin ._**
 
 ## UsenetProvider Struct
 
