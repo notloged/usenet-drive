@@ -89,12 +89,6 @@ func (u *fileWriter) RemoveFile(ctx context.Context, fileName string) (bool, err
 			return false, err
 		}
 
-		err = u.cNzb.Discard(ctx, fileName)
-		if err != nil {
-			u.log.ErrorContext(ctx, "Error removing corrupted nzb from list", "error", err)
-			return true, nil
-		}
-
 		return true, nil
 	}
 
@@ -142,12 +136,6 @@ func (u *fileWriter) RenameFile(ctx context.Context, fileName string, newFileNam
 	err := os.Rename(fileName, newFileName)
 	if err != nil {
 		return false, err
-	}
-
-	err = u.cNzb.Update(ctx, fileName, newFileName)
-	if err != nil {
-		u.log.ErrorContext(ctx, "Error updating corrupted nzb", "error", err)
-		return true, nil
 	}
 
 	return true, nil
