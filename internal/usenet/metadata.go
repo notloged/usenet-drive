@@ -18,7 +18,8 @@ type Metadata struct {
 }
 
 func LoadMetadataFromNzb(nzbFile *nzb.Nzb) (Metadata, error) {
-	if nzbFile.Meta["file_name"] == "" ||
+	if nzbFile.Meta == nil ||
+		nzbFile.Meta["file_name"] == "" ||
 		nzbFile.Meta["file_size"] == "" ||
 		nzbFile.Meta["mod_time"] == "" ||
 		nzbFile.Meta["file_extension"] == "" {
