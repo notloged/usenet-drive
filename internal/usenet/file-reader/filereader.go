@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	connectionpool "github.com/javi11/usenet-drive/internal/usenet/connection-pool"
+	corruptednzbsmanager "github.com/javi11/usenet-drive/internal/usenet/corrupted-nzbs-manager"
 	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
 	"golang.org/x/net/webdav"
 )
@@ -14,6 +15,7 @@ type fileReader struct {
 	cp        connectionpool.UsenetConnectionPool
 	log       *slog.Logger
 	nzbLoader *nzbloader.NzbLoader
+	cNzb      corruptednzbsmanager.CorruptedNzbsManager
 }
 
 func NewFileReader(options ...Option) *fileReader {
@@ -26,11 +28,12 @@ func NewFileReader(options ...Option) *fileReader {
 		cp:        config.cp,
 		log:       config.log,
 		nzbLoader: config.nzbLoader,
+		cNzb:      config.cNzb,
 	}
 }
 
 func (fr *fileReader) OpenFile(ctx context.Context, name string, flag int, perm fs.FileMode, onClose func() error) (bool, webdav.File, error) {
-	return openFile(ctx, name, flag, perm, fr.cp, fr.log, onClose, fr.nzbLoader)
+	return openFile(ctx, name, flag, perm, fr.cp, fr.log, onClose, fr.nzbLoader, fr.cNzb)
 }
 
 func (fr *fileReader) Stat(name string) (bool, fs.FileInfo, error) {

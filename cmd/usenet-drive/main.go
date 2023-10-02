@@ -109,12 +109,14 @@ var rootCmd = &cobra.Command{
 			usenetfilewriter.WithPostGroups(config.Usenet.Upload.Provider.Groups),
 			usenetfilewriter.WithLogger(log),
 			usenetfilewriter.WithFileAllowlist(config.Usenet.Upload.FileAllowlist),
+			usenetfilewriter.WithCorruptedNzbsManager(cNzbs),
 		)
 
 		usenetFileReader := usenetfilereader.NewFileReader(
 			usenetfilereader.WithConnectionPool(downloadConnPool),
 			usenetfilereader.WithLogger(log),
 			usenetfilereader.WithNzbLoader(nzbLoader),
+			usenetfilereader.WithCorruptedNzbsManager(cNzbs),
 		)
 
 		// Build webdav server

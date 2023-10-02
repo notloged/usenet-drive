@@ -26,7 +26,7 @@ func NewFileInfo(name string, log *slog.Logger, nzbLoader *nzbloader.NzbLoader) 
 	eg.Go(func() error {
 		n, err := nzbLoader.LoadFromFile(name)
 		if err != nil {
-			log.Error(fmt.Sprintf("Error getting file %s, this file will be ignored", name), "err", err)
+			log.Error(fmt.Sprintf("Error getting file %s, this file will be ignored", name), "error", err)
 			return err
 		}
 

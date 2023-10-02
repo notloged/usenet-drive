@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/textproto"
-	"os"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -25,10 +25,11 @@ type buffer struct {
 	mx                 sync.RWMutex
 	chunkSize          int
 	maxDownloadRetries int
+	log                *slog.Logger
 }
 
 // NewBuffer creates a new data volume based on a buffer
-func NewBuffer(nzbFile *nzb.NzbFile, size int, chunkSize int, cp connectionpool.UsenetConnectionPool) (*buffer, error) {
+func NewBuffer(nzbFile *nzb.NzbFile, size int, chunkSize int, cp connectionpool.UsenetConnectionPool, log *slog.Logger) (*buffer, error) {
 	// Article cache can not be too big since it is stored in memory
 	// With 100 the max memory used is 100 * 740kb = 74mb peer stream
 	// This is mainly used to not redownload the same article multiple times if was not already
@@ -45,6 +46,7 @@ func NewBuffer(nzbFile *nzb.NzbFile, size int, chunkSize int, cp connectionpool.
 		cache:              cache,
 		cp:                 cp,
 		maxDownloadRetries: 5,
+		log:                log,
 	}, nil
 }
 
@@ -106,6 +108,9 @@ func (v *buffer) Read(p []byte) (int, error) {
 		}
 		chunk, err := v.downloadSegment(segment, v.nzbFile.Groups, 0)
 		if err != nil {
+			if errors.Is(err, ErrCorruptedNzb) {
+				return n, err
+			}
 			break
 		}
 		beginWriteAt := n
@@ -162,7 +167,11 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string, retrye
 		conn, err := v.cp.Get()
 		if err != nil {
 			v.cp.Close(conn)
-			fmt.Fprintln(os.Stderr, "nntp error:", err)
+			v.log.Error("Error getting nntp connection:", "error", err)
+			if retryes < v.maxDownloadRetries {
+				return v.downloadSegment(segment, groups, retryes+1)
+			}
+
 			return nil, err
 		}
 		defer v.cp.Free(conn)
@@ -179,7 +188,7 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string, retrye
 					return v.downloadSegment(segment, groups, retryes+1)
 				}
 			}
-			fmt.Fprintln(os.Stderr, "nntp error:", err)
+			v.log.Error("Error finding nntp group:", "error", err)
 			return nil, err
 		}
 
@@ -195,13 +204,13 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string, retrye
 					return v.downloadSegment(segment, groups, retryes+1)
 				}
 			}
-			fmt.Fprintln(os.Stderr, "nntp error:", err)
+			v.log.Error("Error getting nntp article body:", "error", err, "segment", segment.Number)
 			return nil, err
 		}
 		yread, err := yenc.Decode(body)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return nil, err
+			v.log.Error("Error decoding yenc article body:", "error", err, "segment", segment.Number)
+			return nil, errors.Join(ErrCorruptedNzb, err)
 		}
 
 		chunk = yread

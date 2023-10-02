@@ -240,7 +240,6 @@ func (d *decoder) readBody() error {
 		// decode
 		d.part.Body = append(d.part.Body, b...)
 	}
-	return nil
 }
 
 func (d *decoder) run() error {
@@ -271,7 +270,6 @@ func (d *decoder) run() error {
 			return err
 		}
 	}
-	return nil
 }
 
 // return a single part from yenc data

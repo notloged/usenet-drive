@@ -11,6 +11,7 @@ import (
 
 	"github.com/javi11/usenet-drive/internal/usenet"
 	connectionpool "github.com/javi11/usenet-drive/internal/usenet/connection-pool"
+	corruptednzbsmanager "github.com/javi11/usenet-drive/internal/usenet/corrupted-nzbs-manager"
 	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
 	"github.com/javi11/usenet-drive/pkg/nzb"
 	"golang.org/x/net/webdav"
@@ -23,6 +24,7 @@ type fileWriter struct {
 	log           *slog.Logger
 	fileAllowlist []string
 	nzbLoader     nzbloader.NzbLoader
+	cNzb          corruptednzbsmanager.CorruptedNzbsManager
 }
 
 func NewFileWriter(options ...Option) *fileWriter {
@@ -38,6 +40,7 @@ func NewFileWriter(options ...Option) *fileWriter {
 		log:           config.log,
 		fileAllowlist: config.fileAllowlist,
 		nzbLoader:     config.nzbLoader,
+		cNzb:          config.cNzb,
 	}
 }
 
@@ -79,11 +82,17 @@ func (u *fileWriter) HasAllowedFileExtension(fileName string) bool {
 	return false
 }
 
-func (u *fileWriter) RemoveFile(_ context.Context, fileName string) (bool, error) {
+func (u *fileWriter) RemoveFile(ctx context.Context, fileName string) (bool, error) {
 	if maskFile := u.getOriginalNzb(fileName); maskFile != "" {
 		err := os.RemoveAll(maskFile)
 		if err != nil {
 			return false, err
+		}
+
+		err = u.cNzb.Discard(ctx, fileName)
+		if err != nil {
+			u.log.ErrorContext(ctx, "Error removing corrupted nzb from list", "error", err)
+			return true, nil
 		}
 
 		return true, nil
@@ -92,7 +101,7 @@ func (u *fileWriter) RemoveFile(_ context.Context, fileName string) (bool, error
 	return false, nil
 }
 
-func (u *fileWriter) RenameFile(_ context.Context, fileName string, newFileName string) (bool, error) {
+func (u *fileWriter) RenameFile(ctx context.Context, fileName string, newFileName string) (bool, error) {
 	originalName := u.getOriginalNzb(fileName)
 	if originalName != "" {
 		// In case you want to update the file extension we need to update it in the original nzb file
@@ -133,6 +142,12 @@ func (u *fileWriter) RenameFile(_ context.Context, fileName string, newFileName 
 	err := os.Rename(fileName, newFileName)
 	if err != nil {
 		return false, err
+	}
+
+	err = u.cNzb.Update(ctx, fileName, newFileName)
+	if err != nil {
+		u.log.ErrorContext(ctx, "Error updating corrupted nzb", "error", err)
+		return true, nil
 	}
 
 	return true, nil

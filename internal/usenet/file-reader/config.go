@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	connectionpool "github.com/javi11/usenet-drive/internal/usenet/connection-pool"
+	corruptednzbsmanager "github.com/javi11/usenet-drive/internal/usenet/corrupted-nzbs-manager"
 	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
 )
 
@@ -11,6 +12,7 @@ type Config struct {
 	cp        connectionpool.UsenetConnectionPool
 	log       *slog.Logger
 	nzbLoader *nzbloader.NzbLoader
+	cNzb      corruptednzbsmanager.CorruptedNzbsManager
 }
 
 type Option func(*Config)
@@ -34,5 +36,11 @@ func WithLogger(log *slog.Logger) Option {
 func WithNzbLoader(nzbLoader *nzbloader.NzbLoader) Option {
 	return func(c *Config) {
 		c.nzbLoader = nzbLoader
+	}
+}
+
+func WithCorruptedNzbsManager(cNzb corruptednzbsmanager.CorruptedNzbsManager) Option {
+	return func(c *Config) {
+		c.cNzb = cNzb
 	}
 }

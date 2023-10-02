@@ -2,7 +2,9 @@ package usenetfilereader
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -12,6 +14,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/javi11/usenet-drive/internal/usenet"
 	connectionpool "github.com/javi11/usenet-drive/internal/usenet/connection-pool"
+	corruptednzbsmanager "github.com/javi11/usenet-drive/internal/usenet/corrupted-nzbs-manager"
 	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
 )
 
@@ -24,6 +27,7 @@ type file struct {
 	metadata  usenet.Metadata
 	nzbLoader *nzbloader.NzbLoader
 	onClose   func() error
+	cNzb      corruptednzbsmanager.CorruptedNzbsManager
 }
 
 func openFile(
@@ -35,6 +39,7 @@ func openFile(
 	log *slog.Logger,
 	onClose func() error,
 	nzbLoader *nzbloader.NzbLoader,
+	cNzb corruptednzbsmanager.CorruptedNzbsManager,
 ) (bool, *file, error) {
 	if !isNzbFile(name) {
 		originalName := getOriginalNzb(name)
@@ -57,7 +62,7 @@ func openFile(
 		return true, nil, os.ErrNotExist
 	}
 
-	buffer, err := NewBuffer(&n.Nzb.Files[0], int(n.Metadata.FileSize), int(n.Metadata.ChunkSize), cp)
+	buffer, err := NewBuffer(&n.Nzb.Files[0], int(n.Metadata.FileSize), int(n.Metadata.ChunkSize), cp, log)
 	if err != nil {
 		return true, nil, err
 	}
@@ -70,6 +75,7 @@ func openFile(
 		log:       log,
 		nzbLoader: nzbLoader,
 		onClose:   onClose,
+		cNzb:      cNzb,
 	}, nil
 }
 
@@ -111,14 +117,34 @@ func (f *file) Read(b []byte) (int, error) {
 	f.fsMutex.RLock()
 	defer f.fsMutex.RUnlock()
 
-	return f.buffer.Read(b)
+	n, err := f.buffer.Read(b)
+	if err != nil {
+		if errors.Is(err, ErrCorruptedNzb) {
+			f.cNzb.Add(context.Background(), f.name, err.Error())
+			return n, io.ErrUnexpectedEOF
+		}
+
+		return n, err
+	}
+
+	return n, nil
 }
 
 func (f *file) ReadAt(b []byte, off int64) (int, error) {
 	f.fsMutex.RLock()
 	defer f.fsMutex.RUnlock()
 
-	return f.buffer.ReadAt(b, off)
+	n, err := f.buffer.ReadAt(b, off)
+	if err != nil {
+		if errors.Is(err, ErrCorruptedNzb) {
+			f.cNzb.Add(context.Background(), f.name, err.Error())
+			return n, io.ErrUnexpectedEOF
+		}
+
+		return n, err
+	}
+
+	return n, nil
 }
 
 func (f *file) Readdir(n int) ([]os.FileInfo, error) {
