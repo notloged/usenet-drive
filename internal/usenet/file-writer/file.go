@@ -37,7 +37,7 @@ type file struct {
 	log               *slog.Logger
 	flag              int
 	perm              fs.FileMode
-	mx                sync.Mutex
+	fsMutex           sync.RWMutex
 	nzbLoader         *nzbloader.NzbLoader
 }
 
@@ -87,6 +87,8 @@ func openFile(
 }
 
 func (f *file) Write(b []byte) (int, error) {
+	f.fsMutex.Lock()
+	defer f.fsMutex.Unlock()
 	n, err := f.buffer.Write(b)
 	if err != nil {
 		return n, err
@@ -112,6 +114,8 @@ func (f *file) Write(b []byte) (int, error) {
 }
 
 func (f *file) Close() error {
+	f.fsMutex.Lock()
+	defer f.fsMutex.Unlock()
 	// Upload the rest of segments
 	if f.buffer.Size() > 0 {
 		f.addSegment(f.buffer.Bytes())
@@ -237,17 +241,14 @@ func (f *file) getMetadata() usenet.Metadata {
 }
 
 func (f *file) addSegment(b []byte) error {
-	f.mx.Lock()
-	defer f.mx.Unlock()
-
-	a := f.buildArticleData()
-	na := NewNttpArticle(b, a)
-
 	conn, err := f.cp.Get()
 	if err != nil {
 		f.log.Error("Error getting connection from pool.", "error", err)
 		return err
 	}
+
+	a := f.buildArticleData()
+	na := NewNttpArticle(b, a)
 	f.wg.Add(1)
 	go func(c *nntp.Conn, art *nntp.Article) {
 		defer f.wg.Done()
