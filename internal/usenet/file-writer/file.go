@@ -249,6 +249,13 @@ func (f *file) addSegment(b []byte) error {
 
 	a := f.buildArticleData()
 	na := NewNttpArticle(b, a)
+	f.segments[f.currentPartNumber] = nzb.NzbSegment{
+		Bytes:  a.partSize,
+		Number: a.partNum,
+		Id:     a.msgId,
+	}
+	f.currentPartNumber++
+
 	f.wg.Add(1)
 	go func(c *nntp.Conn, art *nntp.Article) {
 		defer f.wg.Done()
@@ -260,14 +267,6 @@ func (f *file) addSegment(b []byte) error {
 		}
 
 	}(conn, na)
-
-	f.segments[f.currentPartNumber] = nzb.NzbSegment{
-		Bytes:  a.partSize,
-		Number: a.partNum,
-		Id:     a.msgId,
-	}
-
-	f.currentPartNumber++
 	return nil
 }
 
