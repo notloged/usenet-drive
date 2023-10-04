@@ -36,6 +36,7 @@ type file struct {
 	log               *slog.Logger
 	flag              int
 	perm              fs.FileMode
+	mx                sync.Mutex
 }
 
 func openFile(
@@ -227,6 +228,9 @@ func (f *file) getMetadata() usenet.Metadata {
 }
 
 func (f *file) addSegment(b []byte) error {
+	f.mx.Lock()
+	defer f.mx.Unlock()
+
 	a := f.buildArticleData()
 	na := NewNttpArticle(b, a)
 

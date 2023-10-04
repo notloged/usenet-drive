@@ -53,7 +53,7 @@ type UpdateableMetadata struct {
 
 func (n *Nzb) WriteIntoFile(f *os.File) error {
 	sort.Sort(n.Files)
-	for i, _ := range n.Files {
+	for i := range n.Files {
 		sort.Sort(n.Files[i].Segments)
 	}
 	nzb := nzbToXNzb(n)
