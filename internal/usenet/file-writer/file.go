@@ -14,6 +14,7 @@ import (
 	"github.com/chrisfarms/nntp"
 	"github.com/javi11/usenet-drive/internal/usenet"
 	connectionpool "github.com/javi11/usenet-drive/internal/usenet/connection-pool"
+	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
 	"github.com/javi11/usenet-drive/pkg/nzb"
 )
 
@@ -37,6 +38,7 @@ type file struct {
 	flag              int
 	perm              fs.FileMode
 	mx                sync.Mutex
+	nzbLoader         *nzbloader.NzbLoader
 }
 
 func openFile(
@@ -49,6 +51,7 @@ func openFile(
 	flag int,
 	perm fs.FileMode,
 	log *slog.Logger,
+	nzbLoader *nzbloader.NzbLoader,
 	onClose func() error,
 ) (*file, error) {
 	parts := fileSize / segmentSize
@@ -79,6 +82,7 @@ func openFile(
 		onClose:      onClose,
 		flag:         flag,
 		perm:         perm,
+		nzbLoader:    nzbLoader,
 	}, nil
 }
 
@@ -149,6 +153,11 @@ func (f *file) Close() error {
 	}
 
 	err = fl.Close()
+	if err != nil {
+		return err
+	}
+
+	_, err = f.nzbLoader.RefreshCachedNzb(name, &nzb)
 	if err != nil {
 		return err
 	}

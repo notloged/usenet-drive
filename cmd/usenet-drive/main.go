@@ -110,6 +110,7 @@ var rootCmd = &cobra.Command{
 			usenetfilewriter.WithLogger(log),
 			usenetfilewriter.WithFileAllowlist(config.Usenet.Upload.FileAllowlist),
 			usenetfilewriter.WithCorruptedNzbsManager(cNzbs),
+			usenetfilewriter.WithNzbLoader(nzbLoader),
 		)
 
 		usenetFileReader := usenetfilereader.NewFileReader(

@@ -23,7 +23,7 @@ type fileWriter struct {
 	postGroups    []string
 	log           *slog.Logger
 	fileAllowlist []string
-	nzbLoader     nzbloader.NzbLoader
+	nzbLoader     *nzbloader.NzbLoader
 	cNzb          corruptednzbsmanager.CorruptedNzbsManager
 }
 
@@ -64,6 +64,7 @@ func (u *fileWriter) OpenFile(
 		flag,
 		perm,
 		u.log,
+		u.nzbLoader,
 		onClose,
 	)
 }
@@ -137,6 +138,10 @@ func (u *fileWriter) RenameFile(ctx context.Context, fileName string, newFileNam
 		if newFileName == fileName {
 			return true, nil
 		}
+	}
+
+	if !isNzbFile(fileName) {
+		return false, nil
 	}
 
 	err := os.Rename(fileName, newFileName)

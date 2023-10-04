@@ -178,12 +178,7 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string, retrye
 
 		err = usenet.FindGroup(conn, groups)
 		if err != nil {
-			if _, ok := err.(*textproto.Error); ok {
-				// if err is a response error free the connection
-				// Probably an that can not be solved by retrying
-				v.cp.Free(conn)
-			} else {
-				v.cp.Close(conn)
+			if _, ok := err.(*textproto.Error); !ok {
 				if retryes < v.maxDownloadRetries {
 					return v.downloadSegment(segment, groups, retryes+1)
 				}
@@ -194,12 +189,7 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string, retrye
 
 		body, err := conn.Body(fmt.Sprintf("<%v>", segment.Id))
 		if err != nil {
-			if _, ok := err.(*textproto.Error); ok {
-				// if err is a response error free the connection
-				// Probably an that can not be solved by retrying
-				v.cp.Free(conn)
-			} else {
-				v.cp.Close(conn)
+			if _, ok := err.(*textproto.Error); !ok {
 				if retryes < v.maxDownloadRetries {
 					return v.downloadSegment(segment, groups, retryes+1)
 				}

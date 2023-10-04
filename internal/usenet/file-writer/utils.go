@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/go-faker/faker/v4"
 	"github.com/google/uuid"
@@ -24,4 +25,8 @@ func generateRandomPoster() string {
 func generateMessageId() string {
 	id := uuid.New()
 	return fmt.Sprintf("%s@usenetdrive", id.String())
+}
+
+func isNzbFile(name string) bool {
+	return strings.HasSuffix(name, ".nzb")
 }
