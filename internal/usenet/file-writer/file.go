@@ -150,6 +150,7 @@ func (f *file) Close() error {
 		return err
 	}
 
+	// Create and upload the nzb file
 	subject := fmt.Sprintf("[1/1] - \"%s\" yEnc (1/%d)", f.fileNameHash, f.parts)
 	nzb := &nzb.Nzb{
 		Files: []nzb.NzbFile{

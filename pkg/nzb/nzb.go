@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"io"
 	"os"
-	"sort"
 )
 
 const (
@@ -52,10 +51,6 @@ type UpdateableMetadata struct {
 }
 
 func (n *Nzb) WriteIntoFile(f *os.File) error {
-	sort.Sort(n.Files)
-	for i := range n.Files {
-		sort.Sort(n.Files[i].Segments)
-	}
 	nzb := nzbToXNzb(n)
 	if output, err := xml.MarshalIndent(nzb, "", "    "); err == nil {
 		output = []byte(NzbHeader + NzbDoctype + string(output))
@@ -80,10 +75,6 @@ func (n *Nzb) UpdateMetadada(metadata UpdateableMetadata) *Nzb {
 }
 
 func (n *Nzb) ToBytes() ([]byte, error) {
-	sort.Sort(n.Files)
-	for i := range n.Files {
-		sort.Sort(n.Files[i].Segments)
-	}
 	xNzb := nzbToXNzb(n)
 
 	output, err := xml.MarshalIndent(xNzb, "", "    ")
