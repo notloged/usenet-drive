@@ -191,6 +191,12 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string, retrye
 					return v.downloadSegment(segment, groups, retryes+1)
 				}
 			}
+
+			if err.Error() == "430 No such article found" {
+				v.log.Error("Error getting nntp article body, marking it as corrupted.", "error", err, "segment", segment.Number)
+				return nil, errors.Join(ErrCorruptedNzb, err)
+			}
+
 			v.log.Error("Error getting nntp article body:", "error", err, "segment", segment.Number)
 			return nil, err
 		}

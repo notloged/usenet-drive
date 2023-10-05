@@ -8,10 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/chrisfarms/nntp"
+	"github.com/hashicorp/go-multierror"
 	"github.com/javi11/usenet-drive/internal/usenet"
 	connectionpool "github.com/javi11/usenet-drive/internal/usenet/connection-pool"
 	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
@@ -19,33 +19,35 @@ import (
 )
 
 type file struct {
-	dryRun            bool
-	segments          []nzb.NzbSegment
-	currentPartNumber int64
-	parts             int64
-	segmentSize       int64
-	fileSize          int64
-	fileName          string
-	fileNameHash      string
-	poster            string
-	group             string
-	cp                connectionpool.UsenetConnectionPool
-	buffer            *segmentBuffer
-	currentSize       int64
-	modTime           time.Time
-	wg                *sync.WaitGroup
-	onClose           func() error
-	log               *slog.Logger
-	flag              int
-	perm              fs.FileMode
-	nzbLoader         *nzbloader.NzbLoader
+	dryRun              bool
+	segments            []nzb.NzbSegment
+	currentSegmentIndex int64
+	parts               int64
+	segmentSize         int64
+	fileSize            int64
+	fileName            string
+	fileNameHash        string
+	filePath            string
+	poster              string
+	group               string
+	cp                  connectionpool.UsenetConnectionPool
+	maxDownloadRetries  int
+	buffer              *segmentBuffer
+	currentSize         int64
+	modTime             time.Time
+	merr                *multierror.Group
+	onClose             func() error
+	log                 *slog.Logger
+	flag                int
+	perm                fs.FileMode
+	nzbLoader           *nzbloader.NzbLoader
 }
 
 func openFile(
 	ctx context.Context,
 	fileSize int64,
 	segmentSize int64,
-	fileName string,
+	filePath string,
 	cp connectionpool.UsenetConnectionPool,
 	randomGroup string,
 	flag int,
@@ -57,7 +59,7 @@ func openFile(
 ) (*file, error) {
 
 	if dryRun {
-		log.InfoContext(ctx, "Dry run. Skipping upload", "filename", fileName)
+		log.InfoContext(ctx, "Dry run. Skipping upload", "filename", filePath)
 	}
 
 	parts := fileSize / segmentSize
@@ -65,6 +67,14 @@ func openFile(
 	if rem > 0 {
 		parts++
 	}
+
+	fileExt := filepath.Ext(filePath)
+	fileName := truncateFileName(
+		filepath.Base(filePath),
+		fileExt,
+		// 255 is the max length of a file name in most filesystems
+		255-len(fileExt),
+	)
 
 	fileNameHash, err := generateHashFromString(fileName)
 	if err != nil {
@@ -74,23 +84,25 @@ func openFile(
 	poster := generateRandomPoster()
 
 	return &file{
-		dryRun:       dryRun,
-		segments:     make([]nzb.NzbSegment, parts),
-		parts:        parts,
-		segmentSize:  segmentSize,
-		fileSize:     fileSize,
-		fileName:     fileName,
-		fileNameHash: fileNameHash,
-		cp:           cp,
-		poster:       poster,
-		group:        randomGroup,
-		buffer:       NewSegmentBuffer(segmentSize),
-		log:          log,
-		onClose:      onClose,
-		flag:         flag,
-		perm:         perm,
-		nzbLoader:    nzbLoader,
-		wg:           &sync.WaitGroup{},
+		maxDownloadRetries: 5,
+		dryRun:             dryRun,
+		segments:           make([]nzb.NzbSegment, parts),
+		parts:              parts,
+		segmentSize:        segmentSize,
+		fileSize:           fileSize,
+		fileName:           fileName,
+		filePath:           filePath,
+		fileNameHash:       fileNameHash,
+		cp:                 cp,
+		poster:             poster,
+		group:              randomGroup,
+		buffer:             NewSegmentBuffer(segmentSize),
+		log:                log,
+		onClose:            onClose,
+		flag:               flag,
+		perm:               perm,
+		nzbLoader:          nzbLoader,
+		merr:               &multierror.Group{},
 	}, nil
 }
 
@@ -101,12 +113,14 @@ func (f *file) Write(b []byte) (int, error) {
 	}
 
 	if f.buffer.Size() == int(f.segmentSize) {
-		err = f.addSegment(f.buffer.Bytes())
+		err = f.addSegment(f.buffer.Bytes(), f.currentSegmentIndex, f.maxDownloadRetries)
 		if err != nil {
 			return n, err
 		}
 
+		f.currentSegmentIndex += 1
 		f.buffer.Clear()
+
 		if n < len(b) {
 			nb, err := f.buffer.Write(b[n:])
 			if err != nil {
@@ -126,13 +140,15 @@ func (f *file) Write(b []byte) (int, error) {
 func (f *file) Close() error {
 	// Upload the rest of segments
 	if f.buffer.Size() > 0 {
-		f.addSegment(f.buffer.Bytes())
+		f.addSegment(f.buffer.Bytes(), f.currentSegmentIndex, f.maxDownloadRetries)
 	}
 
 	f.buffer.Clear()
 
 	// Wait for all uploads to finish
-	f.wg.Wait()
+	if err := f.merr.Wait().ErrorOrNil(); err != nil {
+		return err
+	}
 
 	subject := fmt.Sprintf("[1/1] - \"%s\" yEnc (1/%d)", f.fileNameHash, f.parts)
 	nzb := &nzb.Nzb{
@@ -155,18 +171,18 @@ func (f *file) Close() error {
 	}
 
 	// Write and close the tmp nzb file
-	name := usenet.ReplaceFileExtension(f.fileName, ".nzb")
+	nzbFilePath := usenet.ReplaceFileExtension(f.filePath, ".nzb")
 	b, err := nzb.ToBytes()
 	if err != nil {
 		return err
 	}
 
-	err = os.WriteFile(name, b, f.perm)
+	err = os.WriteFile(nzbFilePath, b, f.perm)
 	if err != nil {
 		return err
 	}
 
-	_, err = f.nzbLoader.RefreshCachedNzb(name, nzb)
+	_, err = f.nzbLoader.RefreshCachedNzb(nzbFilePath, nzb)
 	if err != nil {
 		return err
 	}
@@ -245,47 +261,54 @@ func (f *file) getMetadata() usenet.Metadata {
 	}
 }
 
-func (f *file) addSegment(b []byte) error {
+func (f *file) addSegment(b []byte, segmentIndex int64, retries int) error {
 	conn, err := f.cp.Get()
 	if err != nil {
-		if err = f.cp.Close(conn); err != nil {
-			f.log.Error("Error closing connection.", "error", err)
+		if conn != nil {
+			if err = f.cp.Close(conn); err != nil {
+				f.log.Error("Error closing connection.", "error", err)
+			}
 		}
 		f.log.Error("Error getting connection from pool.", "error", err)
+
+		if retries > 0 {
+			return f.addSegment(b, segmentIndex, retries-1)
+		}
+
 		return err
 	}
 
-	a := f.buildArticleData()
-	na := NewNttpArticle(b, a)
-	f.segments[f.currentPartNumber] = nzb.NzbSegment{
-		Bytes:  a.partSize,
-		Number: a.partNum,
-		Id:     a.msgId,
-	}
-	f.currentPartNumber++
-
-	f.wg.Add(1)
-	go func(c *nntp.Conn, art *nntp.Article) {
+	f.merr.Go(func() error {
 		defer f.cp.Free(conn)
-		defer f.wg.Done()
 
-		err := f.upload(art, c)
-		if err != nil {
-			f.log.Error("Error uploading segment.", "error", err, "segment", art.Header)
-			return
+		a := f.buildArticleData(segmentIndex)
+		na := NewNttpArticle(b, a)
+		f.segments[segmentIndex] = nzb.NzbSegment{
+			Bytes:  a.partSize,
+			Number: a.partNum,
+			Id:     a.msgId,
 		}
 
-	}(conn, na)
+		err := f.upload(na, conn)
+		if err != nil {
+			f.log.Error("Error uploading segment.", "error", err, "segment", na.Header)
+			return err
+		}
+
+		return nil
+
+	})
+
 	return nil
 }
 
-func (f *file) buildArticleData() *ArticleData {
-	start := f.currentPartNumber * f.segmentSize
-	end := min((f.currentPartNumber+1)*f.segmentSize, f.fileSize)
+func (f *file) buildArticleData(segmentIndex int64) *ArticleData {
+	start := segmentIndex * f.segmentSize
+	end := min((segmentIndex+1)*f.segmentSize, f.fileSize)
 	msgId := generateMessageId()
 
 	return &ArticleData{
-		partNum:   f.currentPartNumber + 1,
+		partNum:   segmentIndex + 1,
 		partTotal: f.parts,
 		partSize:  end - start,
 		partBegin: start,
@@ -308,7 +331,7 @@ func (f *file) upload(a *nntp.Article, conn *nntp.Conn) error {
 	}
 
 	var err error
-	for i := 0; i < 5; i++ {
+	for i := 0; i < f.maxDownloadRetries; i++ {
 		err = conn.Post(a)
 		if err == nil {
 			return nil
