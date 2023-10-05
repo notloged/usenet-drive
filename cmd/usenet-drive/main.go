@@ -38,6 +38,13 @@ var rootCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		// Setup logger
+		options := &slog.HandlerOptions{}
+
+		if config.Debug {
+			options.Level = slog.LevelDebug
+		}
+
 		jsonHandler := slog.NewJSONHandler(
 			io.MultiWriter(
 				os.Stdout,
@@ -46,7 +53,7 @@ var rootCmd = &cobra.Command{
 					MaxSize:    5,
 					MaxAge:     14,
 					MaxBackups: 5,
-				}), nil)
+				}), options)
 		log := slog.New(jsonHandler)
 
 		// download connection pool
@@ -59,7 +66,7 @@ var rootCmd = &cobra.Command{
 			connectionpool.WithMaxConnections(config.Usenet.Download.MaxConnections),
 		)
 		if err != nil {
-			log.ErrorContext(ctx, "Failed to connect to Usenet: %v", err)
+			log.ErrorContext(ctx, "Failed to init usenet download pool: %v", err)
 			os.Exit(1)
 		}
 
@@ -73,7 +80,7 @@ var rootCmd = &cobra.Command{
 			connectionpool.WithMaxConnections(config.Usenet.Upload.Provider.MaxConnections),
 		)
 		if err != nil {
-			log.ErrorContext(ctx, "Failed to connect to Usenet: %v", err)
+			log.ErrorContext(ctx, "Failed to init usenet upload pool: %v", err)
 			os.Exit(1)
 		}
 
@@ -111,6 +118,7 @@ var rootCmd = &cobra.Command{
 			usenetfilewriter.WithFileAllowlist(config.Usenet.Upload.FileAllowlist),
 			usenetfilewriter.WithCorruptedNzbsManager(cNzbs),
 			usenetfilewriter.WithNzbLoader(nzbLoader),
+			usenetfilewriter.WithDryRun(config.Usenet.Upload.DryRun),
 		)
 
 		usenetFileReader := usenetfilereader.NewFileReader(
