@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net/textproto"
-	"strings"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/javi11/usenet-drive/internal/usenet"
@@ -193,13 +192,8 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string, retrye
 				}
 			}
 
-			if strings.Contains(err.Error(), "No such article found") {
-				v.log.Error("Error getting nntp article body, marking it as corrupted.", "error", err, "segment", segment.Number)
-				return nil, errors.Join(ErrCorruptedNzb, err)
-			}
-
-			v.log.Error("Error getting nntp article body:", "error", err, "segment", segment.Number)
-			return nil, err
+			v.log.Error("Error getting nntp article body, marking it as corrupted.", "error", err, "segment", segment.Number)
+			return nil, errors.Join(ErrCorruptedNzb, err)
 		}
 		yread, err := yenc.Decode(body)
 		if err != nil {
