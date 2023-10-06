@@ -12,29 +12,17 @@ const (
 	NzbDoctype = `<!DOCTYPE nzb PUBLIC "-//newzBin//DTD NZB 1.1//EN" "http://www.newzbin.com/DTD/nzb/nzb-1.1.dtd">` + "\n"
 )
 
-type NzbFileSlice []NzbFile
-
-func (s NzbFileSlice) Len() int           { return len(s) }
-func (s NzbFileSlice) Less(i, j int) bool { return s[i].Part < s[j].Part }
-func (s NzbFileSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
-type NzbSegmentSlice []NzbSegment
-
-func (s NzbSegmentSlice) Len() int           { return len(s) }
-func (s NzbSegmentSlice) Less(i, j int) bool { return s[i].Number < s[j].Number }
-func (s NzbSegmentSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
 type Nzb struct {
 	Meta  map[string]string
-	Files NzbFileSlice
+	Files []NzbFile
 }
 
 type NzbFile struct {
-	Groups   []string        `xml:"groups>group"`
-	Segments NzbSegmentSlice `xml:"segments>segment"`
-	Poster   string          `xml:"poster,attr"`
-	Date     int64           `xml:"date,attr"`
-	Subject  string          `xml:"subject,attr"`
+	Groups   []string     `xml:"groups>group"`
+	Segments []NzbSegment `xml:"segments>segment"`
+	Poster   string       `xml:"poster,attr"`
+	Date     int64        `xml:"date,attr"`
+	Subject  string       `xml:"subject,attr"`
 	Part     int64
 }
 
@@ -103,8 +91,8 @@ func NzbFromBuffer(buf io.Reader) (*Nzb, error) {
 	for _, md := range xnzb.Head {
 		nzb.Meta[md.Type] = md.Value
 	}
-	// copy files into (sortable) NzbFileSlice
-	nzb.Files = make(NzbFileSlice, len(xnzb.File))
+
+	nzb.Files = make([]NzbFile, len(xnzb.File))
 	for i, file := range xnzb.File {
 		nzb.Files[i] = xNzbFileToNzbFile(&file)
 	}

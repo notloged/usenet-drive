@@ -64,7 +64,7 @@ func nzbToXNzb(nzb *Nzb) *xNzb {
 }
 
 func xNzbFileToNzbFile(f *xNzbFile) NzbFile {
-	segments := make(NzbSegmentSlice, len(f.Segments))
+	segments := make([]NzbSegment, len(f.Segments))
 	for i, segment := range f.Segments {
 		segments[i] = xNzbSegmentToNzbSegment(&segment)
 	}

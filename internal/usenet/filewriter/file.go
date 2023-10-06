@@ -67,13 +67,7 @@ func openFile(
 		parts++
 	}
 
-	fileExt := filepath.Ext(filePath)
-	fileName := truncateFileName(
-		filepath.Base(filePath),
-		fileExt,
-		// 255 is the max length of a file name in most filesystems
-		255-len(fileExt),
-	)
+	fileName := filepath.Base(filePath)
 
 	fileNameHash, err := generateHashFromString(fileName)
 	if err != nil {
