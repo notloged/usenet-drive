@@ -48,8 +48,8 @@ func New(
 	{
 		v1.GET("/server-info", handlers.GetServerInfoHandler(si))
 		v1.GET("/nzbs/corrupted", handlers.GetCorruptedNzbListHandler(cNzb))
-		v1.DELETE("/nzbs/corrupted", handlers.DeleteCorruptedNzbHandler(cNzb))
-		v1.PUT("/nzbs/corrupted/discard", handlers.DiscardCorruptedNzbHandler(cNzb))
+		v1.DELETE("/nzbs/corrupted/:id", handlers.DeleteCorruptedNzbHandler(cNzb))
+		v1.PUT("/nzbs/corrupted/discard/:id", handlers.DiscardCorruptedNzbHandler(cNzb))
 		v1.GET("/nzbs/corrupted/:id", handlers.GetCorruptedNzbContentHandler(cNzb))
 	}
 
