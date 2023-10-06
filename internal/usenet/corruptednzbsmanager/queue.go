@@ -26,8 +26,9 @@ type SortBy struct {
 
 type CorruptedNzbsManager interface {
 	Add(ctx context.Context, path, error string) error
-	Delete(ctx context.Context, path string) error
-	Discard(ctx context.Context, path string) error
+	Delete(ctx context.Context, id int) error
+	Discard(ctx context.Context, id int) (*cNzb, error)
+	DiscardByPath(ctx context.Context, path string) (*cNzb, error)
 	Update(ctx context.Context, oldPath, newPath string) error
 	List(ctx context.Context, limit, offset int, filters *Filters, sortBy *SortBy) (Result, error)
 	GetFileContent(ctx context.Context, id int) (io.ReadCloser, error)
@@ -74,7 +75,7 @@ func (q *corruptedNzbsManager) Add(ctx context.Context, path, error string) erro
 	}
 	defer stmt.Close()
 
-	_, err = stmt.ExecContext(ctx, path, error)
+	_, err = stmt.ExecContext(ctx, usenet.ReplaceFileExtension(path, ".nzb"), error)
 	if err != nil {
 		return err
 	}
@@ -82,41 +83,67 @@ func (q *corruptedNzbsManager) Add(ctx context.Context, path, error string) erro
 	return nil
 }
 
-func (q *corruptedNzbsManager) Delete(ctx context.Context, path string) error {
-	err := q.Discard(ctx, path)
+func (q *corruptedNzbsManager) Delete(ctx context.Context, id int) error {
+	cnzb, err := q.Discard(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	if _, err := os.Stat(path); err == nil {
-		return os.Remove(path)
+	if _, err := os.Stat(cnzb.Path); err == nil {
+		return os.Remove(cnzb.Path)
 	}
 
 	return nil
 }
 
-func (q *corruptedNzbsManager) Discard(ctx context.Context, path string) error {
+func (q *corruptedNzbsManager) DiscardByPath(ctx context.Context, path string) (*cNzb, error) {
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	row := tx.QueryRowContext(ctx, "SELECT id, path, created_at FROM corrupted_nzbs WHERE path = ?", path)
+	row := tx.QueryRowContext(ctx, "SELECT id, path, created_at FROM corrupted_nzbs WHERE id = ?", path)
 
 	var j cNzb
 	err = row.Scan(&j.ID, &j.Path, &j.CreatedAt)
 	if err != nil {
 		tx.Commit()
-		return nil
+		return nil, nil
 	}
 
-	_, err = tx.ExecContext(ctx, "DELETE FROM corrupted_nzbs WHERE path = ?", path)
+	_, err = tx.ExecContext(ctx, "DELETE FROM corrupted_nzbs WHERE id = ?", path)
 	if err != nil {
 		tx.Rollback()
-		return err
+		return nil, err
 	}
 
-	return tx.Commit()
+	return &j, tx.Commit()
+}
+
+func (q *corruptedNzbsManager) Discard(ctx context.Context, id int) (*cNzb, error) {
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	row := tx.QueryRowContext(ctx, "SELECT id, path, created_at FROM corrupted_nzbs WHERE id = ?", id)
+
+	var j cNzb
+	err = row.Scan(&j.ID, &j.Path, &j.CreatedAt)
+	if err != nil {
+		tx.Commit()
+		return nil, nil
+	}
+
+	_, err = tx.ExecContext(ctx, "DELETE FROM corrupted_nzbs WHERE id = ?", id)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	j.Path = usenet.ReplaceFileExtension(j.Path, ".nzb")
+
+	return &j, tx.Commit()
 }
 
 func (q *corruptedNzbsManager) Update(ctx context.Context, oldPath, newPath string) error {
@@ -229,7 +256,7 @@ func (q *corruptedNzbsManager) GetFileContent(ctx context.Context, id int) (io.R
 		return nil, err
 	}
 
-	file, err := os.Open(path)
+	file, err := os.Open(usenet.ReplaceFileExtension(path, ".nzb"))
 	if err != nil {
 		return nil, err
 	}

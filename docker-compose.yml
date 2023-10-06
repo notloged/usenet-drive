@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: /usenet-drive -c /config/config.yaml
+    command: /usenetdrive -c /config/config.yaml
     ports:
       - "8080:8080"
       - "8081:8081"

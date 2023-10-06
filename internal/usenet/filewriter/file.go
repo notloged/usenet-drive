@@ -149,6 +149,14 @@ func (f *file) Close() error {
 		return err
 	}
 
+	for _, segment := range f.segments {
+		if segment.Bytes == 0 {
+			f.log.Warn("Upload was canceled. The file will not be written.", "fileName", f.fileName)
+
+			return nil
+		}
+	}
+
 	// Create and upload the nzb file
 	subject := fmt.Sprintf("[1/1] - \"%s\" yEnc (1/%d)", f.fileNameHash, f.parts)
 	nzb := &nzb.Nzb{

@@ -120,6 +120,7 @@ func (f *file) Read(b []byte) (int, error) {
 	n, err := f.buffer.Read(b)
 	if err != nil {
 		if errors.Is(err, ErrCorruptedNzb) {
+			f.log.Error("Marking file as corrupted:", "error", err, "fileName", f.name)
 			f.cNzb.Add(context.Background(), f.name, err.Error())
 			return n, io.ErrUnexpectedEOF
 		}
@@ -137,6 +138,7 @@ func (f *file) ReadAt(b []byte, off int64) (int, error) {
 	n, err := f.buffer.ReadAt(b, off)
 	if err != nil {
 		if errors.Is(err, ErrCorruptedNzb) {
+			f.log.Error("Marking file as corrupted:", "error", err, "fileName", f.name)
 			f.cNzb.Add(context.Background(), f.name, err.Error())
 			return n, io.ErrUnexpectedEOF
 		}

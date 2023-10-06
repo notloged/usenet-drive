@@ -64,16 +64,16 @@ function useCorruptedNzbs(params: Params) {
         keepPreviousData: true, //useful for paginated queries by keeping data from previous pages on screen while fetching the next page
         staleTime: 30_000, //don't refetch previously viewed pages until cache is more than 30 seconds old
     });
-};
+}
 
 function useDiscardNzb(params: Params) {
     const fetchURL = buildURL(params)
 
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (nzbPath: string) => {
+        mutationFn: async (id: number) => {
             const fetchURL = new URL(
-                '/api/v1/nzbs/corrupted/discard',
+                `/api/v1/nzbs/corrupted/discard/${id}`,
                 process.env.NODE_ENV === 'production'
                     ? window.location.origin
                     : 'http://localhost:8081',
@@ -83,11 +83,10 @@ function useDiscardNzb(params: Params) {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ path: nzbPath }),
             });
 
             if (res.ok) {
-                notifications.show({ title: 'NZB discarded', color: 'green', message: nzbPath })
+                notifications.show({ title: 'NZB discarded', color: 'green', message: id })
 
                 return
             } else {
@@ -98,14 +97,14 @@ function useDiscardNzb(params: Params) {
             }
         },
         //client side optimistic update
-        onMutate: (path: string) => {
+        onMutate: (id: number) => {
             queryClient.setQueryData(
                 ['corruptednzb', fetchURL],
-                (prevNzbs: any) => {
-                    const res: CorruptedNzbResponse = prevNzbs
+                (prevNzbs: unknown) => {
+                    const res = prevNzbs as CorruptedNzbResponse
                     return {
                         ...res,
-                        entries: res.entries.filter((prevNzb: CorruptedNzb) => prevNzb.path !== path),
+                        entries: res.entries.filter((prevNzb: CorruptedNzb) => prevNzb.id !== id),
                         total_count: res.total_count - 1
                     }
                 },
@@ -120,9 +119,9 @@ function useDeleteNzb(params: Params) {
 
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (nzbPath: string) => {
+        mutationFn: async (id: number) => {
             const fetchURL = new URL(
-                '/api/v1/nzbs/corrupted',
+                `/api/v1/nzbs/corrupted/${id}`,
                 process.env.NODE_ENV === 'production'
                     ? window.location.origin
                     : 'http://localhost:8081',
@@ -131,12 +130,11 @@ function useDeleteNzb(params: Params) {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ path: nzbPath }),
+                }
             });
 
             if (res.ok) {
-                notifications.show({ title: 'NZB deleted', color: 'green', message: nzbPath })
+                notifications.show({ title: 'NZB deleted', color: 'green', message: id })
 
                 return
             } else {
@@ -147,11 +145,17 @@ function useDeleteNzb(params: Params) {
             }
         },
         //client side optimistic update
-        onMutate: (path: string) => {
+        onMutate: (id: number) => {
             queryClient.setQueryData(
                 ['corruptednzb', fetchURL],
-                (prevNzb: any) =>
-                    prevNzb?.filter((prevNzb: CorruptedNzb) => prevNzb.path !== path),
+                (prevNzbs: unknown) => {
+                    const res = prevNzbs as CorruptedNzbResponse
+                    return {
+                        ...res,
+                        entries: res.entries.filter((prevNzb: CorruptedNzb) => prevNzb.id !== id),
+                        total_count: res.total_count - 1
+                    }
+                },
             );
         },
         onSettled: () => queryClient.invalidateQueries({ queryKey: ['corruptednzb', fetchURL] }), //refetch nzbs after mutation, disabled for demo
@@ -293,10 +297,10 @@ export default function CorruptedNzbs() {
         ),
         renderTopToolbar: ({ table }) => {
             const handleDelete = async () => {
-                await Promise.allSettled(table.getSelectedRowModel().flatRows.map((row) => deleteNzb(row.getValue('path'))));
+                await Promise.allSettled(table.getSelectedRowModel().flatRows.map((row) => deleteNzb(row.getValue('id'))));
             };
             const handleDiscard = async () => {
-                await Promise.allSettled(table.getSelectedRowModel().flatRows.map((row) => discardNzb(row.getValue('path'))));
+                await Promise.allSettled(table.getSelectedRowModel().flatRows.map((row) => discardNzb(row.getValue('id'))));
             };
 
             return (

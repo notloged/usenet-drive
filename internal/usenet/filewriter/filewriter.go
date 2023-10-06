@@ -93,7 +93,7 @@ func (u *fileWriter) RemoveFile(ctx context.Context, fileName string) (bool, err
 			return false, err
 		}
 
-		err = u.cNzb.Discard(ctx, fileName)
+		_, err = u.cNzb.DiscardByPath(ctx, maskFile)
 		if err != nil {
 			u.log.ErrorContext(ctx, "Error removing corrupted nzb from list", "error", err)
 			return true, nil
