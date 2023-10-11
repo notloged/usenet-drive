@@ -47,7 +47,7 @@ func NewConnectionPool(options ...Option) (*connectionPool, error) {
 
 	poolConfig := &pool.Config{
 		InitialCap: twentyPercent,
-		MaxIdle:    twentyPercent,
+		MaxIdle:    config.maxConnections,
 		MaxCap:     config.maxConnections,
 		Factory:    factory,
 		Close:      close,
