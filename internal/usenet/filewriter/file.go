@@ -31,7 +31,7 @@ type file struct {
 	poster              string
 	group               string
 	cp                  connectionpool.UsenetConnectionPool
-	maxDownloadRetries  int
+	maxUploadRetries    int
 	buffer              *segmentBuffer
 	currentSize         int64
 	modTime             time.Time
@@ -77,25 +77,25 @@ func openFile(
 	poster := generateRandomPoster()
 
 	return &file{
-		maxDownloadRetries: 5,
-		dryRun:             dryRun,
-		segments:           make([]nzb.NzbSegment, parts),
-		parts:              parts,
-		segmentSize:        segmentSize,
-		fileSize:           fileSize,
-		fileName:           fileName,
-		filePath:           filePath,
-		fileNameHash:       fileNameHash,
-		cp:                 cp,
-		poster:             poster,
-		group:              randomGroup,
-		buffer:             NewSegmentBuffer(segmentSize),
-		log:                log,
-		onClose:            onClose,
-		flag:               flag,
-		perm:               perm,
-		nzbLoader:          nzbLoader,
-		merr:               &multierror.Group{},
+		maxUploadRetries: 5,
+		dryRun:           dryRun,
+		segments:         make([]nzb.NzbSegment, parts),
+		parts:            parts,
+		segmentSize:      segmentSize,
+		fileSize:         fileSize,
+		fileName:         fileName,
+		filePath:         filePath,
+		fileNameHash:     fileNameHash,
+		cp:               cp,
+		poster:           poster,
+		group:            randomGroup,
+		buffer:           NewSegmentBuffer(segmentSize),
+		log:              log,
+		onClose:          onClose,
+		flag:             flag,
+		perm:             perm,
+		nzbLoader:        nzbLoader,
+		merr:             &multierror.Group{},
 	}, nil
 }
 
@@ -106,7 +106,7 @@ func (f *file) Write(b []byte) (int, error) {
 	}
 
 	if f.buffer.Size() == int(f.segmentSize) {
-		err = f.addSegment(f.buffer.Bytes(), f.currentSegmentIndex, f.maxDownloadRetries)
+		err = f.addSegment(f.buffer.Bytes(), f.currentSegmentIndex, f.maxUploadRetries)
 		if err != nil {
 			return n, err
 		}
@@ -133,7 +133,7 @@ func (f *file) Write(b []byte) (int, error) {
 func (f *file) Close() error {
 	// Upload the rest of segments
 	if f.buffer.Size() > 0 {
-		f.addSegment(f.buffer.Bytes(), f.currentSegmentIndex, f.maxDownloadRetries)
+		f.addSegment(f.buffer.Bytes(), f.currentSegmentIndex, f.maxUploadRetries)
 	}
 
 	f.buffer.Clear()
@@ -326,19 +326,39 @@ func (f *file) buildArticleData(segmentIndex int64) *ArticleData {
 
 func (f *file) upload(a *nntp.Article, conn *nntp.Conn) error {
 	if f.dryRun {
-		time.Sleep(2000 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 
 		return nil
 	}
 
 	var err error
-	for i := 0; i < f.maxDownloadRetries; i++ {
+	for i := 0; i < f.maxUploadRetries; i++ {
 		err = conn.Post(a)
 		if err == nil {
 			return nil
-		} else {
-			f.log.Error("Error uploading segment. Retrying", "error", err, "segment", a.Header)
 		}
+
+		if !connectionpool.IsRetryable(err) {
+			f.log.Error("Error uploading segment.", "error", err, "segment", a.Header, "retryable", false)
+			return err
+		}
+
+		f.log.Error("Error uploading segment. Retrying", "error", err, "segment", a.Header, "retryable", true)
+		err := f.cp.Close(conn)
+		if err != nil {
+			f.log.Error("Error closing connection.", "error", err)
+		}
+		conn, err = f.cp.Get()
+		if err != nil {
+			f.log.Error("Error getting connection from pool.", "error", err)
+			return err
+		}
+		defer func() {
+			err := f.cp.Free(conn)
+			if err != nil {
+				f.log.Error("Error freeing the connection.", "error", err)
+			}
+		}()
 	}
 
 	return err
