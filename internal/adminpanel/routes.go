@@ -42,6 +42,9 @@ func New(
 		e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 			AllowOrigins: []string{"*"},
 		}))
+
+		// Register profile handlers to /debug/pprof/profile
+		handlers.PProfMiddleware(e)
 	}
 
 	v1 := e.Group("/api/v1")

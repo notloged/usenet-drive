@@ -4,18 +4,22 @@ import (
 	"context"
 	"io/fs"
 	"log/slog"
+	"os"
+	"path/filepath"
 
 	"github.com/javi11/usenet-drive/internal/usenet/connectionpool"
 	"github.com/javi11/usenet-drive/internal/usenet/corruptednzbsmanager"
 	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
+	"github.com/javi11/usenet-drive/pkg/osfs"
 	"golang.org/x/net/webdav"
 )
 
 type fileReader struct {
 	cp        connectionpool.UsenetConnectionPool
 	log       *slog.Logger
-	nzbLoader *nzbloader.NzbLoader
+	nzbLoader nzbloader.NzbLoader
 	cNzb      corruptednzbsmanager.CorruptedNzbsManager
+	fs        osfs.FileSystem
 }
 
 func NewFileReader(options ...Option) *fileReader {
@@ -29,28 +33,54 @@ func NewFileReader(options ...Option) *fileReader {
 		log:       config.log,
 		nzbLoader: config.nzbLoader,
 		cNzb:      config.cNzb,
+		fs:        config.fs,
 	}
 }
 
-func (fr *fileReader) OpenFile(ctx context.Context, name string, flag int, perm fs.FileMode, onClose func() error) (bool, webdav.File, error) {
-	return openFile(ctx, name, flag, perm, fr.cp, fr.log, onClose, fr.nzbLoader, fr.cNzb)
+func (fr *fileReader) OpenFile(ctx context.Context, path string, flag int, perm fs.FileMode, onClose func() error) (bool, webdav.File, error) {
+	return openFile(
+		ctx,
+		path,
+		flag,
+		perm,
+		fr.cp,
+		fr.log,
+		onClose,
+		fr.nzbLoader,
+		fr.cNzb,
+		fr.fs,
+	)
 }
 
-func (fr *fileReader) Stat(name string) (bool, fs.FileInfo, error) {
-	if !isNzbFile(name) {
-		originalName := getOriginalNzb(name)
-		if originalName != "" {
+func (fr *fileReader) Stat(path string) (bool, fs.FileInfo, error) {
+	var stat fs.FileInfo
+	if !isNzbFile(path) {
+		originalFile := getOriginalNzb(fr.fs, path)
+		if originalFile != nil {
 			// If the file is a masked call the original nzb file
-			name = originalName
+			path = filepath.Join(filepath.Dir(path), originalFile.Name())
+			stat = originalFile
 		} else {
 			return false, nil, nil
 		}
+	} else {
+		s, err := fr.fs.Stat(path)
+		if err != nil {
+			return true, nil, err
+		}
+
+		stat = s
 	}
 
 	// If file is a nzb file return a custom file that will mask the nzb
-	fi, err := NewFileInfo(name, fr.log, fr.nzbLoader)
+	fi, err := NewFileInfoWithStat(
+		path,
+		fr.log,
+		fr.nzbLoader,
+		stat,
+	)
 	if err != nil {
-		return true, nil, err
+		return true, nil, os.ErrNotExist
 	}
 	return true, fi, nil
 }

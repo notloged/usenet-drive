@@ -6,23 +6,28 @@ import (
 	"github.com/javi11/usenet-drive/internal/usenet/connectionpool"
 	"github.com/javi11/usenet-drive/internal/usenet/corruptednzbsmanager"
 	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
+	"github.com/javi11/usenet-drive/pkg/osfs"
 )
 
 type Config struct {
-	segmentSize   int64
-	cp            connectionpool.UsenetConnectionPool
-	postGroups    []string
-	log           *slog.Logger
-	fileAllowlist []string
-	nzbLoader     *nzbloader.NzbLoader
-	cNzb          corruptednzbsmanager.CorruptedNzbsManager
-	dryRun        bool
+	segmentSize      int64
+	cp               connectionpool.UsenetConnectionPool
+	postGroups       []string
+	log              *slog.Logger
+	fileAllowlist    []string
+	nzbLoader        nzbloader.NzbLoader
+	cNzb             corruptednzbsmanager.CorruptedNzbsManager
+	dryRun           bool
+	fs               osfs.FileSystem
+	maxUploadRetries int
 }
 
 type Option func(*Config)
 
 func defaultConfig() *Config {
-	return &Config{}
+	return &Config{
+		maxUploadRetries: 5,
+	}
 }
 
 func WithDryRun(dryRun bool) Option {
@@ -61,7 +66,7 @@ func WithFileAllowlist(fileAllowlist []string) Option {
 	}
 }
 
-func WithNzbLoader(nzbLoader *nzbloader.NzbLoader) Option {
+func WithNzbLoader(nzbLoader nzbloader.NzbLoader) Option {
 	return func(c *Config) {
 		c.nzbLoader = nzbLoader
 	}
@@ -70,5 +75,17 @@ func WithNzbLoader(nzbLoader *nzbloader.NzbLoader) Option {
 func WithCorruptedNzbsManager(cNzb corruptednzbsmanager.CorruptedNzbsManager) Option {
 	return func(c *Config) {
 		c.cNzb = cNzb
+	}
+}
+
+func WithFileSystem(fs osfs.FileSystem) Option {
+	return func(c *Config) {
+		c.fs = fs
+	}
+}
+
+func WithMaxUploadRetries(maxUploadRetries int) Option {
+	return func(c *Config) {
+		c.maxUploadRetries = maxUploadRetries
 	}
 }

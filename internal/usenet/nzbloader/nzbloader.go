@@ -1,99 +1,77 @@
 package nzbloader
 
+//go:generate mockgen -source=./nzbloader.go -destination=./nzbloader_mock.go -package=nzbloader NzbLoader
+
 import (
 	"context"
-	"os"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/javi11/usenet-drive/internal/usenet"
 	"github.com/javi11/usenet-drive/internal/usenet/corruptednzbsmanager"
 	"github.com/javi11/usenet-drive/pkg/nzb"
+	"github.com/javi11/usenet-drive/pkg/osfs"
 )
 
-type nzbCache struct {
+type NzbLoader interface {
+	LoadFromFile(name string) (*NzbCache, error)
+	LoadFromFileReader(f osfs.File) (*NzbCache, error)
+	EvictFromCache(name string) bool
+	RefreshCachedNzb(name string, nzb *nzb.Nzb) (bool, error)
+}
+
+type NzbCache struct {
 	Nzb      *nzb.Nzb
 	Metadata usenet.Metadata
 }
 
-type NzbLoader struct {
-	cache *lru.Cache[string, *nzbCache]
-	cNzb  corruptednzbsmanager.CorruptedNzbsManager
+type nzbLoader struct {
+	cache     *lru.Cache[string, *NzbCache]
+	cNzb      corruptednzbsmanager.CorruptedNzbsManager
+	fs        osfs.FileSystem
+	nzbParser nzb.NzbParser
 }
 
-func NewNzbLoader(maxCacheSize int, cNzb corruptednzbsmanager.CorruptedNzbsManager) (*NzbLoader, error) {
-	cache, err := lru.New[string, *nzbCache](maxCacheSize)
+func NewNzbLoader(
+	maxCacheSize int,
+	cNzb corruptednzbsmanager.CorruptedNzbsManager,
+	fs osfs.FileSystem,
+	nzbParser nzb.NzbParser,
+) (NzbLoader, error) {
+	cache, err := lru.New[string, *NzbCache](maxCacheSize)
 	if err != nil {
 		return nil, err
 	}
 
-	return &NzbLoader{
-		cache: cache,
-		cNzb:  cNzb,
+	return &nzbLoader{
+		cache:     cache,
+		cNzb:      cNzb,
+		fs:        fs,
+		nzbParser: nzbParser,
 	}, nil
 }
 
-func (n *NzbLoader) LoadFromFile(name string) (*nzbCache, error) {
+func (n *nzbLoader) LoadFromFile(name string) (*NzbCache, error) {
 	if nzb, ok := n.cache.Get(name); ok {
 		return nzb, nil
 	}
 
-	file, err := os.Open(name)
+	file, err := n.fs.Open(name)
 	if err != nil {
 		return nil, err
 	}
 
-	nzb, err := nzb.NzbFromBuffer(file)
-	if err != nil {
-		if err = n.cNzb.Add(context.Background(), name, err.Error()); err != nil {
-			return nil, err
-		}
-	}
-	metadata, err := usenet.LoadMetadataFromNzb(nzb)
-	if err != nil {
-		if err = n.cNzb.Add(context.Background(), name, err.Error()); err != nil {
-			return nil, err
-		}
-	}
-
-	nzbCache := &nzbCache{
-		Nzb:      nzb,
-		Metadata: metadata,
-	}
-
-	n.cache.Add(name, nzbCache)
-
-	return nzbCache, nil
+	return n.loadNzb(file)
 }
 
-func (n *NzbLoader) LoadFromFileReader(f *os.File) (*nzbCache, error) {
+func (n *nzbLoader) LoadFromFileReader(f osfs.File) (*NzbCache, error) {
 	if nzb, ok := n.cache.Get(f.Name()); ok {
 		return nzb, nil
 	}
 
-	nzb, err := nzb.NzbFromBuffer(f)
-	if err != nil {
-		if err = n.cNzb.Add(context.Background(), f.Name(), err.Error()); err != nil {
-			return nil, err
-		}
-	}
-	metadata, err := usenet.LoadMetadataFromNzb(nzb)
-	if err != nil {
-		if err = n.cNzb.Add(context.Background(), f.Name(), err.Error()); err != nil {
-			return nil, err
-		}
-	}
-
-	nzbCache := &nzbCache{
-		Nzb:      nzb,
-		Metadata: metadata,
-	}
-
-	n.cache.Add(f.Name(), nzbCache)
-
-	return nzbCache, nil
+	return n.loadNzb(f)
 }
 
-func (n *NzbLoader) EvictFromCache(name string) bool {
+func (n *nzbLoader) EvictFromCache(name string) bool {
 	if n.cache.Contains(name) {
 		return n.cache.Remove(name)
 	}
@@ -101,14 +79,42 @@ func (n *NzbLoader) EvictFromCache(name string) bool {
 	return false
 }
 
-func (n *NzbLoader) RefreshCachedNzb(name string, nzb *nzb.Nzb) (bool, error) {
+func (n *nzbLoader) RefreshCachedNzb(name string, nzb *nzb.Nzb) (bool, error) {
 	metadata, err := usenet.LoadMetadataFromNzb(nzb)
 	if err != nil {
 		return false, err
 	}
 
-	return n.cache.Add(name, &nzbCache{
+	return n.cache.Add(name, &NzbCache{
 		Nzb:      nzb,
 		Metadata: metadata,
 	}), nil
+}
+
+func (n *nzbLoader) loadNzb(f osfs.File) (*NzbCache, error) {
+	nzb, err := n.nzbParser.Parse(f)
+	if err != nil {
+		if e := n.cNzb.Add(context.Background(), f.Name(), err.Error()); e != nil {
+			return nil, e
+		}
+
+		return nil, err
+	}
+	metadata, err := usenet.LoadMetadataFromNzb(nzb)
+	if err != nil {
+		if e := n.cNzb.Add(context.Background(), f.Name(), err.Error()); e != nil {
+			return nil, e
+		}
+
+		return nil, err
+	}
+
+	nzbCache := &NzbCache{
+		Nzb:      nzb,
+		Metadata: metadata,
+	}
+
+	n.cache.Add(f.Name(), nzbCache)
+
+	return nzbCache, nil
 }

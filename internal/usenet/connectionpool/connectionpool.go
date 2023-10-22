@@ -1,13 +1,10 @@
-//Copyright 2013, Daniel Morsing
-//For licensing information, See the LICENSE file
-
-// This file contains a muxer that will limit the amount of connections
-// that are concurrently running.
+//go:generate mockgen -source=./connectionpool.go -destination=./connectionpool_mock.go -package=connectionpool UsenetConnectionPool, NntpConnection
 
 package connectionpool
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"time"
@@ -16,10 +13,34 @@ import (
 	"github.com/silenceper/pool"
 )
 
+type NntpConnection interface {
+	Article(id string) (*nntp.Article, error)
+	ArticleText(id string) (io.Reader, error)
+	Authenticate(username string, password string) error
+	Body(id string) (io.Reader, error)
+	Capabilities() ([]string, error)
+	Date() (time.Time, error)
+	Group(group string) (number int, low int, high int, err error)
+	Head(id string) (*nntp.Article, error)
+	HeadText(id string) (io.Reader, error)
+	Help() (io.Reader, error)
+	Last() (number string, msgid string, err error)
+	List(a ...string) ([]string, error)
+	ModeReader() error
+	NewGroups(since time.Time) ([]*nntp.Group, error)
+	NewNews(group string, since time.Time) ([]string, error)
+	Next() (number string, msgid string, err error)
+	Overview(begin int, end int) ([]nntp.MessageOverview, error)
+	Post(a *nntp.Article) error
+	Quit() error
+	RawPost(r io.Reader) error
+	Stat(id string) (number string, msgid string, err error)
+}
+
 type UsenetConnectionPool interface {
-	Get() (*nntp.Conn, error)
-	Close(c *nntp.Conn) error
-	Free(c *nntp.Conn) error
+	Get() (NntpConnection, error)
+	Close(c NntpConnection) error
+	Free(c NntpConnection) error
 	GetActiveConnections() int
 	GetMaxConnections() int
 	GetFreeConnections() int
@@ -41,7 +62,7 @@ func NewConnectionPool(options ...Option) (*connectionPool, error) {
 	factory := func() (interface{}, error) { return dialNNTP(config) }
 
 	// close Specify the method to close the connection
-	close := func(v interface{}) error { return v.(*nntp.Conn).Quit() }
+	close := func(v interface{}) error { return v.(NntpConnection).Quit() }
 
 	twentyPercent := int(float64(config.maxConnections) * 0.2)
 
@@ -67,19 +88,19 @@ func NewConnectionPool(options ...Option) (*connectionPool, error) {
 	}, nil
 }
 
-func (p *connectionPool) Get() (*nntp.Conn, error) {
+func (p *connectionPool) Get() (NntpConnection, error) {
 	conn, err := p.pool.Get()
 	if err != nil {
 		return nil, err
 	}
-	return conn.(*nntp.Conn), nil
+	return conn.(NntpConnection), nil
 }
 
-func (p *connectionPool) Close(c *nntp.Conn) error {
+func (p *connectionPool) Close(c NntpConnection) error {
 	return p.pool.Close(c)
 }
 
-func (p *connectionPool) Free(c *nntp.Conn) error {
+func (p *connectionPool) Free(c NntpConnection) error {
 	return p.pool.Put(c)
 }
 
@@ -95,10 +116,14 @@ func (p *connectionPool) GetFreeConnections() int {
 	return p.maxConnections - p.pool.Len()
 }
 
-func dialNNTP(config *Config) (*nntp.Conn, error) {
+func dialNNTP(config *Config) (NntpConnection, error) {
+	if config.dryRun {
+		return &MockNntpConnection{}, nil
+	}
+
 	dialStr := config.getConnectionString()
 	var err error
-	var c *nntp.Conn
+	var c NntpConnection
 
 	for {
 		if config.tls {

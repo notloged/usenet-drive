@@ -1,13 +1,13 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
 
+	"github.com/javi11/usenet-drive/db"
 	"github.com/javi11/usenet-drive/internal/adminpanel"
 	"github.com/javi11/usenet-drive/internal/config"
 	"github.com/javi11/usenet-drive/internal/serverinfo"
@@ -17,6 +17,8 @@ import (
 	"github.com/javi11/usenet-drive/internal/usenet/filewriter"
 	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
 	"github.com/javi11/usenet-drive/internal/webdav"
+	"github.com/javi11/usenet-drive/pkg/nzb"
+	"github.com/javi11/usenet-drive/pkg/osfs"
 	"github.com/javi11/usenet-drive/pkg/rclonecli"
 	"github.com/natefinch/lumberjack"
 	"github.com/spf13/cobra"
@@ -59,6 +61,8 @@ var rootCmd = &cobra.Command{
 
 		log.InfoContext(ctx, fmt.Sprintf("Starting Usenet Drive %s", Version))
 
+		osFs := osfs.New()
+
 		// download connection pool
 		downloadConnPool, err := connectionpool.NewConnectionPool(
 			connectionpool.WithHost(config.Usenet.Download.Host),
@@ -73,7 +77,7 @@ var rootCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Upload connectin pool
+		// Upload connection pool
 		uploadConnPool, err := connectionpool.NewConnectionPool(
 			connectionpool.WithHost(config.Usenet.Upload.Provider.Host),
 			connectionpool.WithPort(config.Usenet.Upload.Provider.Port),
@@ -81,6 +85,7 @@ var rootCmd = &cobra.Command{
 			connectionpool.WithPassword(config.Usenet.Upload.Provider.Password),
 			connectionpool.WithTLS(config.Usenet.Upload.Provider.SSL),
 			connectionpool.WithMaxConnections(config.Usenet.Upload.Provider.MaxConnections),
+			connectionpool.WithDryRun(config.Usenet.Upload.DryRun),
 		)
 		if err != nil {
 			log.ErrorContext(ctx, "Failed to init usenet upload pool: %v", err)
@@ -88,18 +93,14 @@ var rootCmd = &cobra.Command{
 		}
 
 		// Create corrupted nzb list
-		sqlLite, err := sql.Open("sqlite3", config.DBPath)
+		sqlLite, err := db.NewDB(config.DBPath)
 		if err != nil {
 			log.ErrorContext(ctx, "Failed to open database: %v", err)
 			os.Exit(1)
 		}
 		defer sqlLite.Close()
 
-		cNzbs, err := corruptednzbsmanager.New(sqlLite)
-		if err != nil {
-			log.ErrorContext(ctx, "Failed to create corrupted nzbs: %v", err)
-			os.Exit(1)
-		}
+		cNzbs := corruptednzbsmanager.New(sqlLite, osFs)
 
 		// Server info
 		serverInfo := serverinfo.NewServerInfo(downloadConnPool, uploadConnPool, config.RootPath)
@@ -107,7 +108,8 @@ var rootCmd = &cobra.Command{
 		adminPanel := adminpanel.New(serverInfo, cNzbs, log, config.Debug)
 		go adminPanel.Start(ctx, config.ApiPort)
 
-		nzbLoader, err := nzbloader.NewNzbLoader(config.NzbCacheSize, cNzbs)
+		nzbParser := nzb.NewNzbParser()
+		nzbLoader, err := nzbloader.NewNzbLoader(config.NzbCacheSize, cNzbs, osFs, nzbParser)
 		if err != nil {
 			log.ErrorContext(ctx, "Failed to create nzb loader: %v", err)
 			os.Exit(1)
@@ -122,6 +124,8 @@ var rootCmd = &cobra.Command{
 			filewriter.WithCorruptedNzbsManager(cNzbs),
 			filewriter.WithNzbLoader(nzbLoader),
 			filewriter.WithDryRun(config.Usenet.Upload.DryRun),
+			filewriter.WithFileSystem(osFs),
+			filewriter.WithMaxUploadRetries(config.Usenet.Upload.MaxRetries),
 		)
 
 		filereader := filereader.NewFileReader(
@@ -160,7 +164,10 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().
 		StringVarP(&configFile, "config", "c", "", "path to YAML config file")
-	rootCmd.MarkPersistentFlagRequired("config")
+	err := rootCmd.MarkPersistentFlagRequired("config")
+	if err != nil {
+		panic(err)
+	}
 }
 
 func main() {

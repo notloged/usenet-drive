@@ -1,11 +1,12 @@
 package filereader
 
+//go:generate mockgen -source=./buffer.go -destination=./buffer_mock.go -package=filereader Buffer
+
 import (
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"net/textproto"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/javi11/usenet-drive/internal/usenet"
@@ -13,6 +14,18 @@ import (
 	"github.com/javi11/usenet-drive/pkg/nzb"
 	"github.com/javi11/usenet-drive/pkg/yenc"
 )
+
+var (
+	ErrInvalidWhence = errors.New("seek: invalid whence")
+	ErrSeekNegative  = errors.New("seek: negative position")
+	ErrSeekTooFar    = errors.New("seek: too far")
+)
+
+type Buffer interface {
+	io.ReaderAt
+	io.ReadSeeker
+	io.Closer
+}
 
 // Buf is a Buffer working on a slice of bytes.
 type buffer struct {
@@ -27,11 +40,11 @@ type buffer struct {
 }
 
 // NewBuffer creates a new data volume based on a buffer
-func NewBuffer(nzbFile *nzb.NzbFile, size int, chunkSize int, cp connectionpool.UsenetConnectionPool, log *slog.Logger) (*buffer, error) {
+func NewBuffer(nzbFile *nzb.NzbFile, size int, chunkSize int, cp connectionpool.UsenetConnectionPool, log *slog.Logger) (Buffer, error) {
 	// Article cache can not be too big since it is stored in memory
 	// With 100 the max memory used is 100 * 740kb = 74mb peer stream
-	// This is mainly used to not redownload the same article multiple times if was not already
-	// full readed.
+	// This is mainly used to not download twice the same article multiple times if was not already
+	// full read.
 	cache, err := lru.New[string, *yenc.Part](100)
 	if err != nil {
 		return nil, err
@@ -66,13 +79,13 @@ func (v *buffer) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekEnd: // Relative to the end
 		abs = int64(v.size) + offset
 	default:
-		return 0, errors.New("Seek: invalid whence")
+		return 0, ErrInvalidWhence
 	}
 	if abs < 0 {
-		return 0, errors.New("Seek: negative position")
+		return 0, ErrSeekNegative
 	}
 	if abs > int64(v.size) {
-		return 0, errors.New("Seek: too far")
+		return 0, ErrSeekTooFar
 	}
 	v.ptr = abs
 	return abs, nil
@@ -153,7 +166,7 @@ func (v *buffer) ReadAt(p []byte, off int64) (int, error) {
 	return n, nil
 }
 
-func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string, retryes int) (*yenc.Part, error) {
+func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string, retries int) (*yenc.Part, error) {
 	hit, _ := v.cache.Get(segment.Id)
 
 	var chunk *yenc.Part
@@ -163,22 +176,29 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string, retrye
 		// Get the connection from the pool
 		conn, err := v.cp.Get()
 		if err != nil {
-			v.cp.Close(conn)
-			v.log.Error("Error getting nntp connection:", "error", err)
-			if retryes < v.maxDownloadRetries {
-				return v.downloadSegment(segment, groups, retryes+1)
+			if conn != nil {
+				e := v.cp.Close(conn)
+				if e != nil {
+					v.log.Error("Error closing connection on downloading a file.", "error", e)
+				}
+			}
+			v.log.Error("Error getting nntp connection:", "error", err, "retries", retries)
+			if retries < v.maxDownloadRetries {
+				return v.downloadSegment(segment, groups, retries+1)
 			}
 
 			return nil, err
 		}
-		defer v.cp.Free(conn)
+		defer func() {
+			if err = v.cp.Free(conn); err != nil {
+				v.log.Error("Error freeing connection on downloading a file.", "error", err)
+			}
+		}()
 
 		err = usenet.FindGroup(conn, groups)
 		if err != nil {
-			if _, ok := err.(*textproto.Error); !ok {
-				if retryes < v.maxDownloadRetries {
-					return v.downloadSegment(segment, groups, retryes+1)
-				}
+			if connectionpool.IsRetryable(err) && retries < v.maxDownloadRetries {
+				return v.downloadSegment(segment, groups, retries+1)
 			}
 			v.log.Error("Error finding nntp group:", "error", err)
 			return nil, err
@@ -186,10 +206,8 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string, retrye
 
 		body, err := conn.Body(fmt.Sprintf("<%v>", segment.Id))
 		if err != nil {
-			if _, ok := err.(*textproto.Error); !ok {
-				if retryes < v.maxDownloadRetries {
-					return v.downloadSegment(segment, groups, retryes+1)
-				}
+			if connectionpool.IsRetryable(err) && retries < v.maxDownloadRetries {
+				return v.downloadSegment(segment, groups, retries+1)
 			}
 
 			v.log.Error("Error getting nntp article body, marking it as corrupted.", "error", err, "segment", segment.Number)

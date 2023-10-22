@@ -1,10 +1,10 @@
 package filereader
 
 import (
-	"os"
 	"strings"
 
 	"github.com/javi11/usenet-drive/internal/usenet"
+	"github.com/javi11/usenet-drive/pkg/osfs"
 	"golang.org/x/exp/constraints"
 )
 
@@ -19,12 +19,12 @@ func isNzbFile(name string) bool {
 	return strings.HasSuffix(name, ".nzb")
 }
 
-func getOriginalNzb(name string) string {
+func getOriginalNzb(fs osfs.FileSystem, name string) osfs.FileInfo {
 	originalName := usenet.ReplaceFileExtension(name, ".nzb")
-	_, err := os.Stat(originalName)
-	if os.IsNotExist(err) {
-		return ""
+	stat, err := fs.Stat(originalName)
+	if fs.IsNotExist(err) {
+		return nil
 	}
 
-	return originalName
+	return stat
 }
