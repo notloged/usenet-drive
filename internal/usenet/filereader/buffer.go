@@ -3,6 +3,7 @@ package filereader
 //go:generate mockgen -source=./buffer.go -destination=./buffer_mock.go -package=filereader Buffer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -30,18 +31,23 @@ type Buffer interface {
 
 // Buf is a Buffer working on a slice of bytes.
 type buffer struct {
-	size      int
-	nzbFile   *nzb.NzbFile
-	ptr       int64
-	cache     *lru.Cache[string, *yenc.Part]
-	cp        connectionpool.UsenetConnectionPool
-	chunkSize int
-	dc        downloadConfig
-	log       *slog.Logger
+	ctx              context.Context
+	size             int
+	nzbFile          *nzb.NzbFile
+	ptr              int64
+	cache            *lru.Cache[string, *yenc.Part]
+	cp               connectionpool.UsenetConnectionPool
+	chunkSize        int
+	dc               downloadConfig
+	log              *slog.Logger
+	closed           chan bool
+	nextSegmentIndex chan int
+	boostedList      map[int]bool
 }
 
 // NewBuffer creates a new data volume based on a buffer
 func NewBuffer(
+	ctx context.Context,
 	nzbFile *nzb.NzbFile,
 	size int,
 	chunkSize int,
@@ -58,15 +64,23 @@ func NewBuffer(
 		return nil, err
 	}
 
-	return &buffer{
-		chunkSize: chunkSize,
-		size:      size,
-		nzbFile:   nzbFile,
-		cache:     cache,
-		cp:        cp,
-		dc:        dc,
-		log:       log,
-	}, nil
+	buffer := &buffer{
+		ctx:              ctx,
+		chunkSize:        chunkSize,
+		size:             size,
+		nzbFile:          nzbFile,
+		cache:            cache,
+		cp:               cp,
+		dc:               dc,
+		log:              log,
+		nextSegmentIndex: make(chan int),
+		closed:           make(chan bool),
+		boostedList:      make(map[int]bool),
+	}
+
+	go buffer.downloadBoost(ctx, buffer.nextSegmentIndex)
+
+	return buffer, nil
 }
 
 // Seek sets the offset for the next Read or Write on the buffer to offset,
@@ -102,6 +116,7 @@ func (v *buffer) Seek(offset int64, whence int) (int64, error) {
 // Close the buffer. Currently no effect.
 func (v *buffer) Close() error {
 	v.cache.Purge()
+	v.closed <- true
 	return nil
 }
 
@@ -127,24 +142,22 @@ func (v *buffer) Read(p []byte) (int, error) {
 		}
 
 		nextSegmentIndex := currentSegment + i + 1
-		if nextSegmentIndex < len(v.nzbFile.Segments) {
-			// Preload next segments
-			for j := 0; j < v.dc.maxAheadDownloadSegments; j++ {
-				if nextSegmentIndex+j >= len(v.nzbFile.Segments) {
-					break
-				}
+		// Preload next segments
+		for j := 0; j < v.dc.maxAheadDownloadSegments; j++ {
+			index := nextSegmentIndex + j
 
-				nextSegmentIndex := nextSegmentIndex + j
-				go func() {
-					_, err := v.downloadSegment(v.nzbFile.Segments[nextSegmentIndex], v.nzbFile.Groups)
-					if err != nil {
-						v.log.Error("Error downloading segment.", "error", err, "segment", segment.Number)
-					}
-				}()
+			if index >= len(v.nzbFile.Segments) ||
+				v.boostedList[index] ||
+				v.cache.Contains(v.nzbFile.Segments[index].Id) {
+				break
 			}
+
+			v.boostedList[index] = true
+			// Preload next segments
+			v.nextSegmentIndex <- index
 		}
 
-		chunk, err := v.downloadSegment(segment, v.nzbFile.Groups)
+		chunk, err := v.downloadSegment(v.ctx, segment, v.nzbFile.Groups)
 		if err != nil {
 			if errors.Is(err, ErrCorruptedNzb) {
 				return n, err
@@ -182,24 +195,22 @@ func (v *buffer) ReadAt(p []byte, off int64) (int, error) {
 			break
 		}
 		nextSegmentIndex := currentSegment + i + 1
-		if nextSegmentIndex < len(v.nzbFile.Segments) {
-			// Preload next segments
-			for j := 0; j < v.dc.maxAheadDownloadSegments; j++ {
-				if nextSegmentIndex+j >= len(v.nzbFile.Segments) {
-					break
-				}
+		// Preload next segments
+		for j := 0; j < v.dc.maxAheadDownloadSegments; j++ {
+			index := nextSegmentIndex + j
 
-				nextSegmentIndex := nextSegmentIndex + j
-				go func() {
-					_, err := v.downloadSegment(v.nzbFile.Segments[nextSegmentIndex], v.nzbFile.Groups)
-					if err != nil {
-						v.log.Error("Error downloading segment.", "error", err, "segment", segment.Number)
-					}
-				}()
+			if index >= len(v.nzbFile.Segments) ||
+				v.boostedList[index] ||
+				v.cache.Contains(v.nzbFile.Segments[index].Id) {
+				break
 			}
+
+			v.boostedList[index] = true
+			// Preload next segments
+			v.nextSegmentIndex <- index
 		}
 
-		chunk, err := v.downloadSegment(segment, v.nzbFile.Groups)
+		chunk, err := v.downloadSegment(v.ctx, segment, v.nzbFile.Groups)
 		if err != nil {
 			break
 		}
@@ -211,7 +222,7 @@ func (v *buffer) ReadAt(p []byte, off int64) (int, error) {
 	return n, nil
 }
 
-func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string) (*yenc.Part, error) {
+func (v *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, groups []string) (*yenc.Part, error) {
 	hit, _ := v.cache.Get(segment.Id)
 
 	var chunk *yenc.Part
@@ -260,6 +271,7 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string) (*yenc
 
 			return nil
 		},
+			retry.Context(ctx),
 			retry.Attempts(uint(v.dc.maxDownloadRetries)),
 			retry.DelayType(retry.FixedDelay),
 			retry.RetryIf(func(err error) bool {
@@ -287,6 +299,11 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string) (*yenc
 			if errors.As(err, &e) {
 				err = errors.Join(e.WrappedErrors()...)
 			}
+
+			if errors.Is(err, context.Canceled) {
+				return nil, err
+			}
+
 			return nil, errors.Join(ErrCorruptedNzb, err)
 		}
 
@@ -294,4 +311,24 @@ func (v *buffer) downloadSegment(segment nzb.NzbSegment, groups []string) (*yenc
 	}
 
 	return chunk, nil
+}
+
+func (v *buffer) downloadBoost(ctx context.Context, nextSegmentIndex chan int) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-v.closed:
+			return
+		case i := <-nextSegmentIndex:
+			segment := v.nzbFile.Segments[i]
+			go func() {
+				_, err := v.downloadSegment(ctx, segment, v.nzbFile.Groups)
+				if err != nil {
+					v.log.Error("Error downloading segment.", "error", err, "segment", segment.Number)
+				}
+				v.boostedList[i] = true
+			}()
+		}
+	}
 }
