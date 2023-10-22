@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/javi11/usenet-drive/internal/usenet"
@@ -54,13 +55,16 @@ type cNzb struct {
 type corruptedNzbsManager struct {
 	db *sql.DB
 	fs osfs.FileSystem
+	mx *sync.Mutex
 }
 
 func New(db *sql.DB, fs osfs.FileSystem) CorruptedNzbsManager {
-	return &corruptedNzbsManager{db: db, fs: fs}
+	return &corruptedNzbsManager{db: db, fs: fs, mx: &sync.Mutex{}}
 }
 
 func (q *corruptedNzbsManager) Add(ctx context.Context, path, errorMessage string) error {
+	q.mx.Lock()
+	defer q.mx.Unlock()
 	stmt, err := q.db.PrepareContext(ctx, "INSERT OR IGNORE INTO corrupted_nzbs (path, error) VALUES (?, ?)")
 	if err != nil {
 		return err
@@ -76,6 +80,9 @@ func (q *corruptedNzbsManager) Add(ctx context.Context, path, errorMessage strin
 }
 
 func (q *corruptedNzbsManager) Delete(ctx context.Context, id int) error {
+	q.mx.Lock()
+	defer q.mx.Unlock()
+
 	cnzb, err := q.Discard(ctx, id)
 	if err != nil {
 		return err
@@ -89,6 +96,9 @@ func (q *corruptedNzbsManager) Delete(ctx context.Context, id int) error {
 }
 
 func (q *corruptedNzbsManager) DiscardByPath(ctx context.Context, path string) (*cNzb, error) {
+	q.mx.Lock()
+	defer q.mx.Unlock()
+
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -119,6 +129,9 @@ func (q *corruptedNzbsManager) DiscardByPath(ctx context.Context, path string) (
 }
 
 func (q *corruptedNzbsManager) Discard(ctx context.Context, id int) (*cNzb, error) {
+	q.mx.Lock()
+	defer q.mx.Unlock()
+
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -151,6 +164,9 @@ func (q *corruptedNzbsManager) Discard(ctx context.Context, id int) (*cNzb, erro
 }
 
 func (q *corruptedNzbsManager) Update(ctx context.Context, oldPath, newPath string) error {
+	q.mx.Lock()
+	defer q.mx.Unlock()
+
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -181,7 +197,6 @@ func (q *corruptedNzbsManager) Update(ctx context.Context, oldPath, newPath stri
 }
 
 func (q *corruptedNzbsManager) List(ctx context.Context, limit, offset int, filters *Filters, sortBy *SortBy) (Result, error) {
-
 	sqlFilterBuilder := utils.NewSqlFilterBuilder()
 	var queryParams []any
 
