@@ -78,7 +78,9 @@ func NewBuffer(
 		boostedList:      make(map[int]bool),
 	}
 
-	go buffer.downloadBoost(ctx, buffer.nextSegmentIndex)
+	if dc.maxAheadDownloadSegments > 0 {
+		go buffer.downloadBoost(ctx, buffer.nextSegmentIndex)
+	}
 
 	return buffer, nil
 }
@@ -116,7 +118,9 @@ func (v *buffer) Seek(offset int64, whence int) (int64, error) {
 // Close the buffer. Currently no effect.
 func (v *buffer) Close() error {
 	v.cache.Purge()
-	v.closed <- true
+	if v.dc.maxAheadDownloadSegments > 0 {
+		v.closed <- true
+	}
 	return nil
 }
 
