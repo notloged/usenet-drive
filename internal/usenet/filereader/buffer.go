@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sync"
 
 	"github.com/avast/retry-go"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -42,7 +43,7 @@ type buffer struct {
 	log              *slog.Logger
 	closed           chan bool
 	nextSegmentIndex chan int
-	boostedList      map[int]bool
+	boostedList      *sync.Map
 }
 
 // NewBuffer creates a new data volume based on a buffer
@@ -55,11 +56,16 @@ func NewBuffer(
 	cp connectionpool.UsenetConnectionPool,
 	log *slog.Logger,
 ) (Buffer, error) {
+	boostedList := &sync.Map{}
+
 	// Article cache can not be too big since it is stored in memory
 	// With 100 the max memory used is 100 * 740kb = 74mb peer stream
 	// This is mainly used to not download twice the same article multiple times if was not already
 	// full read.
-	cache, err := lru.New[string, *yenc.Part](100)
+	cache, err := lru.NewWithEvict[string, *yenc.Part](100, func(key string, value *yenc.Part) {
+		// If the article is evicted from the cache, remove it from the boost list
+		boostedList.Delete(key)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +81,7 @@ func NewBuffer(
 		log:              log,
 		nextSegmentIndex: make(chan int),
 		closed:           make(chan bool),
-		boostedList:      make(map[int]bool),
+		boostedList:      boostedList,
 	}
 
 	if dc.maxAheadDownloadSegments > 0 {
@@ -150,13 +156,17 @@ func (v *buffer) Read(p []byte) (int, error) {
 		for j := 0; j < v.dc.maxAheadDownloadSegments; j++ {
 			index := nextSegmentIndex + j
 
-			if index >= len(v.nzbFile.Segments) ||
-				v.boostedList[index] ||
+			if index >= len(v.nzbFile.Segments) {
+				break
+			}
+
+			_, ok := v.boostedList.Load(v.nzbFile.Segments[index].Id)
+			if ok ||
 				v.cache.Contains(v.nzbFile.Segments[index].Id) {
 				break
 			}
 
-			v.boostedList[index] = true
+			v.boostedList.Store(v.nzbFile.Segments[index].Id, true)
 			// Preload next segments
 			v.nextSegmentIndex <- index
 		}
@@ -203,13 +213,17 @@ func (v *buffer) ReadAt(p []byte, off int64) (int, error) {
 		for j := 0; j < v.dc.maxAheadDownloadSegments; j++ {
 			index := nextSegmentIndex + j
 
-			if index >= len(v.nzbFile.Segments) ||
-				v.boostedList[index] ||
+			if index >= len(v.nzbFile.Segments) {
+				break
+			}
+
+			_, ok := v.boostedList.Load(v.nzbFile.Segments[index].Id)
+			if ok ||
 				v.cache.Contains(v.nzbFile.Segments[index].Id) {
 				break
 			}
 
-			v.boostedList[index] = true
+			v.boostedList.Store(v.nzbFile.Segments[index].Id, true)
 			// Preload next segments
 			v.nextSegmentIndex <- index
 		}
@@ -331,7 +345,6 @@ func (v *buffer) downloadBoost(ctx context.Context, nextSegmentIndex chan int) {
 				if err != nil {
 					v.log.Error("Error downloading segment.", "error", err, "segment", segment.Number)
 				}
-				v.boostedList[i] = true
 			}()
 		}
 	}
