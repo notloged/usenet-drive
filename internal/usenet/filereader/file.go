@@ -68,7 +68,7 @@ func openFile(
 
 	buffer, err := NewBuffer(
 		ctx,
-		&n.Nzb.Files[0],
+		n.Nzb.Files[0],
 		int(n.Metadata.FileSize),
 		int(n.Metadata.ChunkSize),
 		dc,
@@ -109,8 +109,6 @@ func (f *file) Close() error {
 	if err := f.buffer.Close(); err != nil {
 		return err
 	}
-
-	f.buffer = nil
 
 	if f.onClose != nil {
 		if err := f.onClose(); err != nil {

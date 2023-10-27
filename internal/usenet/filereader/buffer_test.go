@@ -29,7 +29,7 @@ func TestBuffer_Read(t *testing.T) {
 	mockPool := connectionpool.NewMockUsenetConnectionPool(ctrl)
 
 	nzbFile := &nzb.NzbFile{
-		Segments: []nzb.NzbSegment{
+		Segments: []*nzb.NzbSegment{
 			{Id: "1", Number: 1},
 			{Id: "2", Number: 2},
 			{Id: "3", Number: 3},
@@ -248,7 +248,7 @@ func TestBuffer_ReadAt(t *testing.T) {
 
 	cache := NewMockCache(ctrl)
 	nzbFile := &nzb.NzbFile{
-		Segments: []nzb.NzbSegment{
+		Segments: []*nzb.NzbSegment{
 			{Id: "1", Number: 1},
 			{Id: "2", Number: 2},
 			{Id: "3", Number: 3},
@@ -450,7 +450,7 @@ func TestBuffer_Seek(t *testing.T) {
 	mockPool := connectionpool.NewMockUsenetConnectionPool(ctrl)
 
 	nzbFile := &nzb.NzbFile{
-		Segments: []nzb.NzbSegment{
+		Segments: []*nzb.NzbSegment{
 			{Id: "1", Number: 1},
 			{Id: "2", Number: 2},
 			{Id: "3", Number: 3},
@@ -616,7 +616,7 @@ func TestBuffer_Close(t *testing.T) {
 	mockPool := connectionpool.NewMockUsenetConnectionPool(ctrl)
 
 	nzbFile := &nzb.NzbFile{
-		Segments: []nzb.NzbSegment{
+		Segments: []*nzb.NzbSegment{
 			{Id: "1", Number: 1},
 			{Id: "2", Number: 2},
 			{Id: "3", Number: 3},
@@ -700,7 +700,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 	mockPool := connectionpool.NewMockUsenetConnectionPool(ctrl)
 
 	nzbFile := &nzb.NzbFile{
-		Segments: []nzb.NzbSegment{
+		Segments: []*nzb.NzbSegment{
 			{Id: "1", Number: 1},
 			{Id: "2", Number: 2},
 			{Id: "3", Number: 3},
@@ -829,7 +829,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 		cache.EXPECT().Get("2").Return(nil, errors.New("not found")).Times(1)
 
 		mockPool.EXPECT().Get().Return(mockConn, nil).Times(1)
-		mockPool.EXPECT().Free(mockConn).Return(nil).Times(1)
+		mockPool.EXPECT().Close(mockConn).Return(nil).Times(1)
 		mockConn.EXPECT().Group("group1").Return(0, 0, 0, errors.New("error")).Times(1)
 
 		_, err := buf.downloadSegment(context.Background(), nzbFile.Segments[1], nzbFile.Groups)
@@ -858,7 +858,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 		}
 		mockConn := connectionpool.NewMockNntpConnection(ctrl)
 		mockPool.EXPECT().Get().Return(mockConn, nil).Times(1)
-		mockPool.EXPECT().Free(mockConn).Return(nil).Times(1)
+		mockPool.EXPECT().Close(mockConn).Return(nil).Times(1)
 		mockConn.EXPECT().Group("group1").Return(0, 0, 0, nil).Times(1)
 
 		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
