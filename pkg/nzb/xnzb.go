@@ -5,10 +5,10 @@ import (
 )
 
 type xNzb struct {
-	XMLName xml.Name    `xml:"nzb"`
-	XMLns   string      `xml:"xmlns,attr"`
-	Head    []*xNzbMeta `xml:"head>meta"`
-	File    []*xNzbFile `xml:"file"`
+	XMLName xml.Name   `xml:"nzb"`
+	XMLns   string     `xml:"xmlns,attr"`
+	Head    []xNzbMeta `xml:"head>meta"`
+	File    []xNzbFile `xml:"file"`
 }
 
 type xNzbMeta struct {
@@ -17,11 +17,11 @@ type xNzbMeta struct {
 }
 
 type xNzbFile struct {
-	Poster   string         `xml:"poster,attr"`
-	Date     int64          `xml:"date,attr"`
-	Subject  string         `xml:"subject,attr"`
-	Groups   []string       `xml:"groups>group"`
-	Segments []*xNzbSegment `xml:"segments>segment"`
+	Poster   string        `xml:"poster,attr"`
+	Date     int64         `xml:"date,attr"`
+	Subject  string        `xml:"subject,attr"`
+	Groups   []string      `xml:"groups>group"`
+	Segments []xNzbSegment `xml:"segments>segment"`
 }
 
 type xNzbSegment struct {
@@ -32,22 +32,22 @@ type xNzbSegment struct {
 }
 
 func nzbToXNzb(nzb *Nzb) *xNzb {
-	head := make([]*xNzbMeta, 0)
+	head := make([]xNzbMeta, 0)
 	for k, v := range nzb.Meta {
-		head = append(head, &xNzbMeta{Type: k, Value: v})
+		head = append(head, xNzbMeta{Type: k, Value: v})
 	}
-	file := make([]*xNzbFile, len(nzb.Files))
+	file := make([]xNzbFile, len(nzb.Files))
 	for i, f := range nzb.Files {
-		segments := make([]*xNzbSegment, len(f.Segments))
+		segments := make([]xNzbSegment, len(f.Segments))
 		for j, s := range f.Segments {
-			segments[j] = &xNzbSegment{
+			segments[j] = xNzbSegment{
 				Bytes:     s.Bytes,
 				Number:    s.Number,
 				MessageId: s.Id,
 			}
 		}
 
-		file[i] = &xNzbFile{
+		file[i] = xNzbFile{
 			Poster:   f.Poster,
 			Date:     f.Date,
 			Subject:  f.Subject,
@@ -66,7 +66,7 @@ func nzbToXNzb(nzb *Nzb) *xNzb {
 func xNzbFileToNzbFile(f *xNzbFile) *NzbFile {
 	segments := make([]*NzbSegment, len(f.Segments))
 	for i, segment := range f.Segments {
-		segments[i] = xNzbSegmentToNzbSegment(segment)
+		segments[i] = xNzbSegmentToNzbSegment(&segment)
 	}
 
 	return &NzbFile{
