@@ -6,7 +6,6 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/avast/retry-go v3.0.0+incompatible
-	github.com/chrisfarms/nntp v0.0.0-20150609164919-115924d5d016
 	github.com/creasty/defaults v1.7.0
 	github.com/go-faker/faker/v4 v4.1.1
 	github.com/golang/mock v1.6.0

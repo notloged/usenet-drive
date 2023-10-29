@@ -9,12 +9,12 @@ import (
 	"io"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"syscall"
 
 	"github.com/avast/retry-go"
 	"github.com/javi11/usenet-drive/internal/usenet"
 	"github.com/javi11/usenet-drive/internal/usenet/connectionpool"
+	"github.com/javi11/usenet-drive/pkg/nntpcli"
 	"github.com/javi11/usenet-drive/pkg/nzb"
 	"github.com/javi11/usenet-drive/pkg/yenc"
 )
@@ -223,7 +223,7 @@ func (v *buffer) downloadSegment(ctx context.Context, segment *nzb.NzbSegment, g
 	if err == nil {
 		chunk = hit
 	} else {
-		var conn connectionpool.NntpConnection
+		var conn nntpcli.Connection
 		segment := segment
 		retryErr := retry.Do(func() error {
 			c, err := v.cp.Get()
@@ -268,12 +268,12 @@ func (v *buffer) downloadSegment(ctx context.Context, segment *nzb.NzbSegment, g
 			retry.Attempts(uint(v.dc.maxDownloadRetries)),
 			retry.DelayType(retry.FixedDelay),
 			retry.RetryIf(func(err error) bool {
-				return connectionpool.IsRetryable(err)
+				return nntpcli.IsRetryableError(err)
 			}),
 			retry.OnRetry(func(n uint, err error) {
 				v.log.InfoContext(ctx, "Retrying download", "error", err, "segment", segment.Id, "retry", n)
 
-				if conn != nil {
+				if conn != nil && !errors.Is(err, syscall.EPIPE) {
 					err = v.cp.Close(conn)
 					if err != nil {
 						v.log.DebugContext(ctx, "Error closing connection.", "error", err)
@@ -303,7 +303,10 @@ func (v *buffer) downloadSegment(ctx context.Context, segment *nzb.NzbSegment, g
 			return nil, errors.Join(ErrCorruptedNzb, err)
 		}
 
-		v.cache.Set(segment.Id, chunk)
+		err := v.cache.Set(segment.Id, chunk)
+		if err != nil {
+			v.log.ErrorContext(ctx, "Error caching segment.", "error", err, "segment", segment.Number)
+		}
 	}
 
 	return chunk, nil
@@ -312,8 +315,8 @@ func (v *buffer) downloadSegment(ctx context.Context, segment *nzb.NzbSegment, g
 func (v *buffer) downloadBoost(ctx context.Context, nextSegmentIndex chan int) {
 	defer v.wg.Done()
 
-	activeDownloaders := atomic.Int32{}
-	currentDownloading := map[int]bool{}
+	var mx sync.RWMutex
+	currentDownloading := make(map[int]bool)
 
 	ctx, cancel := context.WithCancelCause(ctx)
 	for {
@@ -325,14 +328,18 @@ func (v *buffer) downloadBoost(ctx context.Context, nextSegmentIndex chan int) {
 			cancel(errors.New("file closed"))
 			return
 		case i := <-nextSegmentIndex:
-			if activeDownloaders.Load() >= int32(v.dc.maxAheadDownloadSegments) || currentDownloading[i] {
+			mx.RLock()
+			if len(currentDownloading) >= v.dc.maxAheadDownloadSegments || currentDownloading[i] {
+				mx.RUnlock()
 				continue
 			}
+			mx.RUnlock()
 
-			activeDownloaders.Add(1)
+			mx.Lock()
 			currentDownloading[i] = true
-			segment := v.nzbFile.Segments[i]
+			mx.Unlock()
 
+			segment := v.nzbFile.Segments[i]
 			v.wg.Add(1)
 			go func() {
 				defer v.wg.Done()
@@ -341,8 +348,9 @@ func (v *buffer) downloadBoost(ctx context.Context, nextSegmentIndex chan int) {
 					v.log.Error("Error downloading segment.", "error", err, "segment", segment.Number)
 				}
 
-				activeDownloaders.Add(-1)
-				currentDownloading[i] = false
+				mx.Lock()
+				delete(currentDownloading, i)
+				mx.Unlock()
 			}()
 		}
 	}

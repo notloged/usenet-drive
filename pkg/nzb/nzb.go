@@ -41,6 +41,9 @@ func (p *nzbParser) Parse(buf io.Reader) (*Nzb, error) {
 	for i, file := range xnzb.File {
 		nzb.Files[i] = xNzbFileToNzbFile(&file)
 	}
+
+	xnzb = xNzb{}
+
 	return nzb, nil
 }
 

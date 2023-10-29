@@ -2,8 +2,9 @@ package connectionpool
 
 import (
 	"crypto/tls"
-	"fmt"
 	"log/slog"
+
+	"github.com/javi11/usenet-drive/pkg/nntpcli"
 )
 
 type Config struct {
@@ -16,10 +17,7 @@ type Config struct {
 	maxConnections int
 	log            *slog.Logger
 	dryRun         bool
-}
-
-func (c *Config) getConnectionString() string {
-	return fmt.Sprintf("%s:%d", c.host, c.port)
+	cli            nntpcli.Client
 }
 
 type Option func(*Config)
@@ -28,6 +26,12 @@ func defaultConfig() *Config {
 	return &Config{
 		tls:    false,
 		dryRun: false,
+	}
+}
+
+func WithClient(cli nntpcli.Client) Option {
+	return func(c *Config) {
+		c.cli = cli
 	}
 }
 
