@@ -1,5 +1,7 @@
 # usenet-drive (WIP)
 
+[![Tests](https://github.com/javi11/usenet-drive/actions/workflows/test.yaml/badge.svg)](https://github.com/javi11/usenet-drive/actions/workflows/test.yaml)
+
 ## Description
 
 This is a simple script that allows you to mount a usenet server as a webdav drive.
