@@ -18,7 +18,6 @@ import (
 	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
 	"github.com/javi11/usenet-drive/internal/webdav"
 	"github.com/javi11/usenet-drive/pkg/nntpcli"
-	"github.com/javi11/usenet-drive/pkg/nzb"
 	"github.com/javi11/usenet-drive/pkg/osfs"
 	"github.com/javi11/usenet-drive/pkg/rclonecli"
 	"github.com/natefinch/lumberjack"
@@ -117,12 +116,7 @@ var rootCmd = &cobra.Command{
 		adminPanel := adminpanel.New(serverInfo, cNzbs, log, config.Debug)
 		go adminPanel.Start(ctx, config.ApiPort)
 
-		nzbParser := nzb.NewNzbParser()
-		nzbLoader, err := nzbloader.NewNzbLoader(config.NzbCacheSize, cNzbs, osFs, nzbParser)
-		if err != nil {
-			log.ErrorContext(ctx, "Failed to create nzb loader: %v", err)
-			os.Exit(1)
-		}
+		nzbWriter := nzbloader.NewNzbWriter(osFs)
 
 		filewriter := filewriter.NewFileWriter(
 			filewriter.WithSegmentSize(config.Usenet.ArticleSizeInBytes),
@@ -131,7 +125,7 @@ var rootCmd = &cobra.Command{
 			filewriter.WithLogger(log),
 			filewriter.WithFileAllowlist(config.Usenet.Upload.FileAllowlist),
 			filewriter.WithCorruptedNzbsManager(cNzbs),
-			filewriter.WithNzbLoader(nzbLoader),
+			filewriter.WithNzbWriter(nzbWriter),
 			filewriter.WithDryRun(config.Usenet.Upload.DryRun),
 			filewriter.WithFileSystem(osFs),
 			filewriter.WithMaxUploadRetries(config.Usenet.Upload.MaxRetries),
@@ -140,7 +134,6 @@ var rootCmd = &cobra.Command{
 		filereader, err := filereader.NewFileReader(
 			filereader.WithConnectionPool(downloadConnPool),
 			filereader.WithLogger(log),
-			filereader.WithNzbLoader(nzbLoader),
 			filereader.WithCorruptedNzbsManager(cNzbs),
 			filereader.WithFileSystem(osFs),
 			filereader.WithMaxDownloadRetries(config.Usenet.Download.MaxRetries),
