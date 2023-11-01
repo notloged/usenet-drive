@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"sync"
 	"syscall"
 
@@ -171,6 +172,7 @@ func (v *buffer) Read(p []byte) (int, error) {
 
 		chunk, err := v.downloadSegment(v.ctx, segment, v.nzbGroups)
 		if err != nil {
+			// If nzb is corrupted stop reading
 			if errors.Is(err, ErrCorruptedNzb) {
 				return n, err
 			}
@@ -224,6 +226,10 @@ func (v *buffer) ReadAt(p []byte, off int64) (int, error) {
 
 		chunk, err := v.downloadSegment(v.ctx, segment, v.nzbGroups)
 		if err != nil {
+			// If nzb is corrupted stop reading
+			if errors.Is(err, ErrCorruptedNzb) {
+				return n, err
+			}
 			break
 		}
 		beginWriteAt := n
@@ -314,6 +320,11 @@ func (v *buffer) downloadSegment(ctx context.Context, segment *nzb.NzbSegment, g
 			}
 
 			if errors.Is(err, context.Canceled) {
+				return nil, err
+			}
+
+			if _, ok := err.(net.Error); ok {
+				// Net errors are retryable
 				return nil, err
 			}
 
