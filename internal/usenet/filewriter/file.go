@@ -81,10 +81,7 @@ func openFile(
 
 	fileName := filepath.Base(filePath)
 
-	fileNameHash, err := generateHashFromString(fileName)
-	if err != nil {
-		return nil, err
-	}
+	fileNameHash := uuid.New().String()
 
 	poster := generateRandomPoster()
 
