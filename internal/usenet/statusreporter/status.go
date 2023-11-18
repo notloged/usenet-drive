@@ -75,14 +75,17 @@ func (s *statusReporter) Start(ctx context.Context, ticker *time.Ticker) {
 			case <-ctx.Done():
 				return
 			case td := <-s.reporter:
+				s.mx.Lock()
 				// New item, add it to our list
 				status := s.status[td.id]
 				if status == nil {
+					s.mx.Unlock()
 					continue
 				}
 
 				status.tds = append(status.tds, td.td)
 				status.TotalBytes += int64(td.td.Bytes)
+				s.mx.Unlock()
 			default:
 				// Nothing else in the channel, done for now
 				breakNow = true

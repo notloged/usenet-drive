@@ -437,7 +437,7 @@ func (f *file) addSegment(ctx context.Context, conn nntpcli.Connection, segments
 			}
 		}
 
-		log.Error("Error uploading segment.", "error", err)
+		log.Error("Error uploading segment.", "error", errors.Unwrap(err))
 		return err
 	}
 
