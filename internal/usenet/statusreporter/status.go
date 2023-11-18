@@ -4,6 +4,7 @@ package status
 import (
 	"context"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -47,12 +48,14 @@ type StatusReporter interface {
 type statusReporter struct {
 	status   map[uuid.UUID]*status
 	reporter chan *reporterData
+	mx       *sync.RWMutex
 }
 
 func NewStatusReporter() StatusReporter {
 	return &statusReporter{
 		status:   make(map[uuid.UUID]*status),
 		reporter: make(chan *reporterData, 10000),
+		mx:       &sync.RWMutex{},
 	}
 }
 
@@ -126,6 +129,9 @@ func (s *statusReporter) AddTimeData(id uuid.UUID, data *TimeData) {
 }
 
 func (s *statusReporter) StartUpload(id uuid.UUID, path string) {
+	s.mx.Lock()
+	defer s.mx.Unlock()
+
 	s.status[id] = &status{
 		Kind: Upload,
 		Path: path,
@@ -133,6 +139,9 @@ func (s *statusReporter) StartUpload(id uuid.UUID, path string) {
 }
 
 func (s *statusReporter) StartDownload(id uuid.UUID, path string) {
+	s.mx.Lock()
+	defer s.mx.Unlock()
+
 	s.status[id] = &status{
 		Kind: Download,
 		Path: path,
@@ -140,10 +149,16 @@ func (s *statusReporter) StartDownload(id uuid.UUID, path string) {
 }
 
 func (s *statusReporter) FinishUpload(id uuid.UUID) {
+	s.mx.Lock()
+	defer s.mx.Unlock()
+
 	delete(s.status, id)
 }
 
 func (s *statusReporter) FinishDownload(id uuid.UUID) {
+	s.mx.Lock()
+	defer s.mx.Unlock()
+
 	delete(s.status, id)
 }
 
