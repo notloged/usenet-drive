@@ -15,7 +15,7 @@ type TimeData struct {
 }
 
 type Client interface {
-	Dial(address string, port int, useTLS bool, insecureSSL bool, providerId string, connectionType ConnectionType) (Connection, error)
+	Dial(address string, port int, useTLS bool, insecureSSL bool, providerId int, connectionType ConnectionType) (Connection, error)
 }
 
 type client struct {
@@ -36,7 +36,7 @@ func New(options ...Option) Client {
 }
 
 // Dial connects to an NNTP server
-func (c *client) Dial(host string, port int, useTLS bool, insecureSSL bool, providerId string, connectionType ConnectionType) (Connection, error) {
+func (c *client) Dial(host string, port int, useTLS bool, insecureSSL bool, providerId int, connectionType ConnectionType) (Connection, error) {
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), c.timeout)
 	if err != nil {
 		return nil, err

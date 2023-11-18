@@ -43,7 +43,7 @@ func TestGetDownloadConnection(t *testing.T) {
 
 	t.Run("get the first provider download connection if available", func(t *testing.T) {
 		mockCon := nntpcli.NewMockConnection(ctrl)
-		providerId := generateProviderId(downloadProviders[0])
+		providerId := 0
 
 		mockNntpCli.EXPECT().
 			Dial("download", 1244, false, false, providerId, nntpcli.DownloadConnection).
@@ -70,7 +70,7 @@ func TestGetDownloadConnection(t *testing.T) {
 
 	t.Run("get second provider connections if there are not download available for first provider", func(t *testing.T) {
 		mockDownloadCon := nntpcli.NewMockConnection(ctrl)
-		providerOneId := generateProviderId(downloadProviders[0])
+		providerOneId := 0
 		mockNntpCli.EXPECT().
 			Dial("download", 1244, false, false, providerOneId, nntpcli.DownloadConnection).
 			Return(mockDownloadCon, nil)
@@ -78,7 +78,7 @@ func TestGetDownloadConnection(t *testing.T) {
 		mockDownloadCon.EXPECT().ProviderID().Return(providerOneId).Times(1)
 
 		mockDownloadCon2 := nntpcli.NewMockConnection(ctrl)
-		providerTwoId := generateProviderId(downloadProviders[1])
+		providerTwoId := 1
 		mockNntpCli.EXPECT().
 			Dial("download2", 1243, false, false, providerTwoId, nntpcli.DownloadConnection).
 			Return(mockDownloadCon2, nil)
@@ -109,7 +109,7 @@ func TestGetDownloadConnection(t *testing.T) {
 
 	t.Run("should free download connection if Free is called", func(t *testing.T) {
 		mockCon := nntpcli.NewMockConnection(ctrl)
-		providerOneId := generateProviderId(downloadProviders[0])
+		providerOneId := 0
 		mockNntpCli.EXPECT().
 			Dial("download", 1244, false, false, providerOneId, nntpcli.DownloadConnection).
 			Return(mockCon, nil)
@@ -140,7 +140,7 @@ func TestGetDownloadConnection(t *testing.T) {
 	})
 
 	t.Run("when dial returns timeout, retry", func(t *testing.T) {
-		providerOneId := generateProviderId(downloadProviders[0])
+		providerOneId := 0
 		mockCon := nntpcli.NewMockConnection(ctrl)
 		mockNntpCli.EXPECT().
 			Dial("download", 1244, false, false, providerOneId, nntpcli.DownloadConnection).
@@ -171,7 +171,7 @@ func TestGetDownloadConnection(t *testing.T) {
 
 	t.Run("get the first provider upload connections if available", func(t *testing.T) {
 		mockCon := nntpcli.NewMockConnection(ctrl)
-		providerOneId := generateProviderId(uploadProviders[0])
+		providerOneId := 0
 		mockNntpCli.EXPECT().
 			Dial("upload", 1244, false, false, providerOneId, nntpcli.UploadConnection).
 			Return(mockCon, nil)
@@ -197,7 +197,7 @@ func TestGetDownloadConnection(t *testing.T) {
 
 	t.Run("should free upload connection if Free is called", func(t *testing.T) {
 		mockCon := nntpcli.NewMockConnection(ctrl)
-		providerOneId := generateProviderId(uploadProviders[0])
+		providerOneId := 0
 		mockNntpCli.EXPECT().
 			Dial("upload", 1244, false, false, providerOneId, nntpcli.UploadConnection).
 			Return(mockCon, nil)

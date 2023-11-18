@@ -3,12 +3,9 @@
 package connectionpool
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net"
-	reflect "reflect"
 	"sync"
 	"time"
 
@@ -30,7 +27,7 @@ type UsenetConnectionPool interface {
 
 type providerStatus struct {
 	provider             config.UsenetProvider
-	id                   string
+	id                   int
 	availableConnections int
 }
 
@@ -42,8 +39,8 @@ type connectionPool struct {
 	freeUploadConn    int
 	maxDownloadConn   int
 	maxUploadConn     int
-	downloadProviders map[string]*providerStatus
-	uploadProviders   map[string]*providerStatus
+	downloadProviders []*providerStatus
+	uploadProviders   []*providerStatus
 	mx                *sync.RWMutex
 }
 
@@ -53,28 +50,26 @@ func NewConnectionPool(options ...Option) (UsenetConnectionPool, error) {
 		option(config)
 	}
 
-	downloadProviders := make(map[string]*providerStatus)
-	uploadProviders := make(map[string]*providerStatus)
+	downloadProviders := make([]*providerStatus, 0)
+	uploadProviders := make([]*providerStatus, 0)
 	maxDownloadConn := 0
 	maxUploadConn := 0
 
-	for _, provider := range config.downloadProviders {
-		id := generateProviderId(provider)
-		downloadProviders[id] = &providerStatus{
+	for i, provider := range config.downloadProviders {
+		downloadProviders = append(downloadProviders, &providerStatus{
 			provider:             provider,
-			id:                   id,
+			id:                   i,
 			availableConnections: provider.MaxConnections,
-		}
+		})
 		maxDownloadConn += provider.MaxConnections
 	}
 
-	for _, provider := range config.uploadProviders {
-		id := generateProviderId(provider)
-		uploadProviders[id] = &providerStatus{
+	for i, provider := range config.uploadProviders {
+		uploadProviders = append(uploadProviders, &providerStatus{
 			provider:             provider,
-			id:                   id,
+			id:                   i,
 			availableConnections: provider.MaxConnections,
-		}
+		})
 		maxUploadConn += provider.MaxConnections
 	}
 
@@ -169,7 +164,7 @@ func (p *connectionPool) Close(c nntpcli.Connection) error {
 	}
 
 	if ps == nil {
-		return fmt.Errorf("provider not found for connection %s", c.ProviderID())
+		return fmt.Errorf("provider not found for connection %v", c.ProviderID())
 	}
 
 	err := pool.Close(c)
@@ -230,7 +225,7 @@ func (p *connectionPool) GetUploadFreeConnections() int {
 	return p.freeUploadConn
 }
 
-func dialNNTP(cli nntpcli.Client, fakeConnections bool, providerConf map[string]*providerStatus, connectionsType nntpcli.ConnectionType, log *slog.Logger) (nntpcli.Connection, error) {
+func dialNNTP(cli nntpcli.Client, fakeConnections bool, providerConf []*providerStatus, connectionsType nntpcli.ConnectionType, log *slog.Logger) (nntpcli.Connection, error) {
 	var err error
 	var c nntpcli.Connection
 
@@ -264,7 +259,7 @@ func dialNNTP(cli nntpcli.Client, fakeConnections bool, providerConf map[string]
 	return c, nil
 }
 
-func firstFreeProvider(providers map[string]*providerStatus) *providerStatus {
+func firstFreeProvider(providers []*providerStatus) *providerStatus {
 	for _, provider := range providers {
 		if provider.availableConnections > 0 {
 			return provider
@@ -272,12 +267,5 @@ func firstFreeProvider(providers map[string]*providerStatus) *providerStatus {
 	}
 
 	// In case there are no free providers choose the first one
-	keys := reflect.ValueOf(providers).MapKeys()
-	return providers[keys[0].String()]
-}
-
-func generateProviderId(provider config.UsenetProvider) string {
-	hash := md5.Sum([]byte(fmt.Sprintf("%s-%s", provider.Host, provider.Username)))
-
-	return fmt.Sprintf("%x", hex.EncodeToString(hash[:]))
+	return providers[0]
 }

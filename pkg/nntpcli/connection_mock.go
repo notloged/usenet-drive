@@ -92,10 +92,10 @@ func (mr *MockConnectionMockRecorder) Post(p, chunkSize interface{}) *gomock.Cal
 }
 
 // ProviderID mocks base method.
-func (m *MockConnection) ProviderID() string {
+func (m *MockConnection) ProviderID() int {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ProviderID")
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].(int)
 	return ret0
 }
 

@@ -7,14 +7,14 @@ import (
 
 type fakeConnection struct {
 	connectionType ConnectionType
-	providerId     string
+	providerId     int
 }
 
-func NewFakeConnection(host string, providerId string, connectionType ConnectionType) Connection {
+func NewFakeConnection(host string, providerId int, connectionType ConnectionType) Connection {
 	return &fakeConnection{}
 }
 
-func (c *fakeConnection) ProviderID() string {
+func (c *fakeConnection) ProviderID() int {
 	return c.providerId
 }
 func (c *fakeConnection) GetConnectionType() ConnectionType {

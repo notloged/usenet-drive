@@ -18,7 +18,7 @@ const (
 )
 
 type Connection interface {
-	ProviderID() string
+	ProviderID() int
 	GetConnectionType() ConnectionType
 	Authenticate(username, password string) error
 	Body(id string) (io.Reader, error)
@@ -33,11 +33,11 @@ type conn struct {
 	close          bool
 	br             *bodyReader
 	host           string
-	providerId     string
+	providerId     int
 	connectionType ConnectionType
 }
 
-func newConn(c net.Conn, host string, providerId string, connectionType ConnectionType) (Connection, error) {
+func newConn(c net.Conn, host string, providerId int, connectionType ConnectionType) (Connection, error) {
 	res := &conn{
 		conn:           c,
 		host:           host,
@@ -54,7 +54,7 @@ func newConn(c net.Conn, host string, providerId string, connectionType Connecti
 	return res, nil
 }
 
-func (c *conn) ProviderID() string {
+func (c *conn) ProviderID() int {
 	return c.providerId
 }
 
