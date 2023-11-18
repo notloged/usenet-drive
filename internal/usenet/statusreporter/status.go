@@ -61,10 +61,12 @@ func NewStatusReporter() StatusReporter {
 
 func (s *statusReporter) Start(ctx context.Context, ticker *time.Ticker) {
 	for t := range ticker.C {
+		s.mx.Lock()
 		stamp := t.UnixNano() / 1e6
 		for _, status := range s.status {
 			status.tds = append(status.tds, &TimeData{stamp, 0})
 		}
+		s.mx.Unlock()
 
 		// Fetch any new TimeData entries
 		var breakNow bool
@@ -96,6 +98,7 @@ func (s *statusReporter) Start(ctx context.Context, ticker *time.Ticker) {
 			}
 		}
 
+		s.mx.Lock()
 		for _, status := range s.status {
 			tds := status.tds
 			if len(tds) > 0 {
@@ -121,6 +124,7 @@ func (s *statusReporter) Start(ctx context.Context, ticker *time.Ticker) {
 
 			status.tds = tds[start:]
 		}
+		s.mx.Unlock()
 	}
 }
 
@@ -166,5 +170,10 @@ func (s *statusReporter) FinishDownload(id uuid.UUID) {
 }
 
 func (s *statusReporter) GetStatus() map[uuid.UUID]*status {
-	return s.status
+	s.mx.RLock()
+	defer s.mx.RUnlock()
+
+	statusCopy := s.status
+
+	return statusCopy
 }
