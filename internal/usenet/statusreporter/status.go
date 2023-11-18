@@ -103,11 +103,16 @@ func (s *statusReporter) Start(ctx context.Context, ticker *time.Ticker) {
 			tds := status.tds
 			if len(tds) > 0 {
 				active := float64(tds[len(tds)-1].Milliseconds-tds[0].Milliseconds) / 1000
+
+				if active == 0 {
+					status.CurrentSpeed = 0
+					continue
+				}
+
 				totalBytes := int64(0)
 				for _, td := range tds {
 					totalBytes += td.Bytes
 				}
-
 				speed := float64(totalBytes) / float64(active)
 				status.CurrentSpeed = math.Abs(speed)
 			}
