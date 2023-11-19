@@ -128,7 +128,7 @@ func (f *file) ReadFrom(src io.Reader) (int64, error) {
 		select {
 		case <-ctx.Done():
 			if err := wg.Wait().ErrorOrNil(); !errors.Is(err, context.Canceled) {
-				f.log.Error("Error closing upload threads.", "error", wg.Wait().ErrorOrNil())
+				f.log.Error("Error closing upload threads.", "error", err)
 			}
 
 			f.sr.FinishUpload(f.sessionId)
@@ -239,16 +239,19 @@ func (f *file) ReadFrom(src io.Reader) (int64, error) {
 
 				if err := wg.Wait().ErrorOrNil(); err != nil {
 					f.log.Error("Error uploading the file. The file will not be written.", "error", err)
+					f.sr.FinishUpload(f.sessionId)
+					f.uploadErr = err
 
-					cancel(io.ErrUnexpectedEOF)
-					continue
+					return bytesWritten, err
 				}
 
 				err := f.writeFinalNzb(segments)
 				if err != nil {
 					f.log.Error("Error writing the nzb file. The file will not be written.", "error", err)
-					cancel(io.ErrUnexpectedEOF)
-					continue
+					f.sr.FinishUpload(f.sessionId)
+					f.uploadErr = err
+
+					return bytesWritten, err
 				}
 
 				f.log.Info("Upload finished successfully.")
