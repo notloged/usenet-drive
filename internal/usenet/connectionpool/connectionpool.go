@@ -153,6 +153,10 @@ func (p *connectionPool) GetDownloadConnection() (nntpcli.Connection, error) {
 }
 
 func (p *connectionPool) Close(c nntpcli.Connection) error {
+	if c.IsClosed() {
+		return nil
+	}
+
 	var ps *providerStatus
 	var pool pool.Pool
 	if c.GetConnectionType() == nntpcli.DownloadConnection {
@@ -180,6 +184,7 @@ func (p *connectionPool) Close(c nntpcli.Connection) error {
 	} else {
 		p.freeUploadConn++
 	}
+
 	ps.availableConnections++
 
 	return nil
@@ -201,9 +206,13 @@ func (p *connectionPool) Free(c nntpcli.Connection) error {
 	p.mx.Lock()
 	defer p.mx.Unlock()
 	if c.GetConnectionType() == nntpcli.DownloadConnection {
-		p.freeDownloadConn++
+		if p.freeDownloadConn < p.maxDownloadConn {
+			p.freeDownloadConn++
+		}
 	} else {
-		p.freeUploadConn++
+		if p.freeUploadConn < p.maxUploadConn {
+			p.freeUploadConn++
+		}
 	}
 
 	return nil
@@ -252,7 +261,9 @@ func dialNNTP(cli nntpcli.Client, fakeConnections bool, providerConf []*provider
 			return nil, err
 		}
 
-		ps.availableConnections--
+		if ps.availableConnections > 0 {
+			ps.availableConnections--
+		}
 
 		break
 	}

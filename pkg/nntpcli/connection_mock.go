@@ -77,6 +77,20 @@ func (mr *MockConnectionMockRecorder) GetConnectionType() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConnectionType", reflect.TypeOf((*MockConnection)(nil).GetConnectionType))
 }
 
+// IsClosed mocks base method.
+func (m *MockConnection) IsClosed() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsClosed")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsClosed indicates an expected call of IsClosed.
+func (mr *MockConnectionMockRecorder) IsClosed() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsClosed", reflect.TypeOf((*MockConnection)(nil).IsClosed))
+}
+
 // Post mocks base method.
 func (m *MockConnection) Post(p []byte, chunkSize int64) error {
 	m.ctrl.T.Helper()

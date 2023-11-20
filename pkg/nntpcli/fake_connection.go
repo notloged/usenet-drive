@@ -8,10 +8,15 @@ import (
 type fakeConnection struct {
 	connectionType ConnectionType
 	providerId     int
+	isClosed       bool
 }
 
 func NewFakeConnection(host string, providerId int, connectionType ConnectionType) Connection {
 	return &fakeConnection{}
+}
+
+func (c *fakeConnection) IsClosed() bool {
+	return c.isClosed
 }
 
 func (c *fakeConnection) ProviderID() int {
@@ -38,5 +43,6 @@ func (c *fakeConnection) Post(p []byte, chunkSize int64) error {
 }
 
 func (c *fakeConnection) Quit() error {
+	c.isClosed = true
 	return nil
 }

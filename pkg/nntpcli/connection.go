@@ -25,6 +25,7 @@ type Connection interface {
 	SelectGroup(group string) (number int, low int, high int, err error)
 	Post(p []byte, chunkSize int64) error
 	Quit() error
+	IsClosed() bool
 }
 
 type conn struct {
@@ -141,6 +142,10 @@ func (c *conn) Quit() error {
 	c.conn.Close()
 	c.close = true
 	return err
+}
+
+func (c *conn) IsClosed() bool {
+	return c.close
 }
 
 // cmd executes an NNTP command:

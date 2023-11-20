@@ -139,6 +139,85 @@ func TestGetDownloadConnection(t *testing.T) {
 		assert.Equal(t, 3, cp.GetDownloadFreeConnections())
 	})
 
+	t.Run("should not close twice a connection", func(t *testing.T) {
+		mockCon := nntpcli.NewMockConnection(ctrl)
+		providerOneId := 0
+		mockNntpCli.EXPECT().
+			Dial("download", 1244, false, false, providerOneId, nntpcli.DownloadConnection).
+			Return(mockCon, nil)
+		mockCon.EXPECT().Authenticate("user", "pass").Return(nil)
+
+		// Close
+		mockCon.EXPECT().IsClosed().Return(false).Times(1)
+		mockCon.EXPECT().Quit().Return(nil).Times(1)
+		mockCon.EXPECT().ProviderID().Return(providerOneId).Times(1)
+		mockCon.EXPECT().GetConnectionType().Return(nntpcli.DownloadConnection).Times(2)
+
+		cp, err := NewConnectionPool(
+			WithClient(mockNntpCli),
+			WithLogger(slog.Default()),
+			WithDownloadProviders(downloadProviders),
+			WithUploadProviders(uploadProviders),
+		)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 3, cp.GetDownloadFreeConnections())
+
+		conn, err := cp.GetDownloadConnection()
+		assert.NoError(t, err)
+
+		assert.Equal(t, 2, cp.GetDownloadFreeConnections())
+
+		err = cp.Close(conn)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 3, cp.GetDownloadFreeConnections())
+
+		mockCon.EXPECT().IsClosed().Return(true).Times(1)
+
+		err = cp.Close(conn)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 3, cp.GetDownloadFreeConnections())
+	})
+
+	t.Run("should not free download connection more times that max connections", func(t *testing.T) {
+		mockCon := nntpcli.NewMockConnection(ctrl)
+		providerOneId := 0
+		mockNntpCli.EXPECT().
+			Dial("download", 1244, false, false, providerOneId, nntpcli.DownloadConnection).
+			Return(mockCon, nil)
+		mockCon.EXPECT().Authenticate("user", "pass").Return(nil)
+
+		// Free
+		mockCon.EXPECT().GetConnectionType().Return(nntpcli.DownloadConnection).Times(4)
+
+		cp, err := NewConnectionPool(
+			WithClient(mockNntpCli),
+			WithLogger(slog.Default()),
+			WithDownloadProviders(downloadProviders),
+			WithUploadProviders(uploadProviders),
+		)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 3, cp.GetDownloadFreeConnections())
+
+		conn, err := cp.GetDownloadConnection()
+		assert.NoError(t, err)
+
+		assert.Equal(t, 2, cp.GetDownloadFreeConnections())
+
+		err = cp.Free(conn)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 3, cp.GetDownloadFreeConnections())
+
+		err = cp.Free(conn)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 3, cp.GetDownloadFreeConnections())
+	})
+
 	t.Run("when dial returns timeout, retry", func(t *testing.T) {
 		providerOneId := 0
 		mockCon := nntpcli.NewMockConnection(ctrl)
