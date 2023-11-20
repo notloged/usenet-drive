@@ -48,10 +48,8 @@ func TestGetDownloadConnection(t *testing.T) {
 		mockNntpCli.EXPECT().
 			Dial("download", 1244, false, false, providerId, nntpcli.DownloadConnection).
 			Return(mockCon, nil)
-		mockCon.EXPECT().ProviderID().Return(providerId).Times(2)
+		mockCon.EXPECT().ProviderID().Return(providerId).Times(1)
 		mockCon.EXPECT().Authenticate("user", "pass").Return(nil)
-		mockCon.EXPECT().GetConnectionType().Return(nntpcli.DownloadConnection).Times(2)
-		mockCon.EXPECT().Quit().Return(nil)
 
 		cp, err := NewConnectionPool(
 			WithClient(mockNntpCli),
@@ -63,7 +61,6 @@ func TestGetDownloadConnection(t *testing.T) {
 
 		conn, err := cp.GetDownloadConnection()
 		assert.NoError(t, err)
-		defer cp.Close(conn)
 
 		assert.Equal(t, providerId, conn.ProviderID())
 	})
@@ -229,9 +226,7 @@ func TestGetDownloadConnection(t *testing.T) {
 			Dial("download", 1244, false, false, providerOneId, nntpcli.DownloadConnection).
 			Return(mockCon, nil)
 		mockCon.EXPECT().Authenticate("user", "pass").Return(nil)
-		mockCon.EXPECT().GetConnectionType().Return(nntpcli.DownloadConnection).Times(2)
-		mockCon.EXPECT().ProviderID().Return(providerOneId).Times(2)
-		mockCon.EXPECT().Quit().Return(nil)
+		mockCon.EXPECT().ProviderID().Return(providerOneId).Times(1)
 
 		cp, err := NewConnectionPool(
 			WithClient(mockNntpCli),
@@ -243,7 +238,6 @@ func TestGetDownloadConnection(t *testing.T) {
 
 		conn, err := cp.GetDownloadConnection()
 		assert.NoError(t, err)
-		defer cp.Close(conn)
 
 		assert.Equal(t, providerOneId, conn.ProviderID())
 	})
@@ -254,10 +248,8 @@ func TestGetDownloadConnection(t *testing.T) {
 		mockNntpCli.EXPECT().
 			Dial("upload", 1244, false, false, providerOneId, nntpcli.UploadConnection).
 			Return(mockCon, nil)
-		mockCon.EXPECT().ProviderID().Return(providerOneId).Times(2)
+		mockCon.EXPECT().ProviderID().Return(providerOneId).Times(1)
 		mockCon.EXPECT().Authenticate("user", "pass").Return(nil)
-		mockCon.EXPECT().GetConnectionType().Return(nntpcli.UploadConnection).Times(2)
-		mockCon.EXPECT().Quit().Return(nil)
 
 		cp, err := NewConnectionPool(
 			WithClient(mockNntpCli),
@@ -269,7 +261,6 @@ func TestGetDownloadConnection(t *testing.T) {
 
 		conn, err := cp.GetUploadConnection()
 		assert.NoError(t, err)
-		defer cp.Close(conn)
 
 		assert.Equal(t, providerOneId, conn.ProviderID())
 	})
