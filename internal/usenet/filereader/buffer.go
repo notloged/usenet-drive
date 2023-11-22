@@ -255,6 +255,11 @@ func (v *buffer) downloadSegment(ctx context.Context, segment *nzb.NzbSegment, g
 					v.cp.Close(conn)
 					conn = nil
 				}
+
+				if errors.Is(err, context.Canceled) {
+					return err
+				}
+
 				v.log.ErrorContext(ctx, "Error getting nntp connection:", "error", err, "segment", segment.Number)
 
 				// Retry
