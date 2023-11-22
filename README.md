@@ -2,6 +2,8 @@
 
 [![Tests](https://github.com/javi11/usenet-drive/actions/workflows/test.yaml/badge.svg)](https://github.com/javi11/usenet-drive/actions/workflows/test.yaml)
 
+<script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="qbt52hh7sjd" data-color="#FFDD00" data-emoji="☕"  data-font="Cookie" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff" ></script>
+
 ## Description
 
 This is a simple script that allows you to mount a usenet server as a webdav drive.
