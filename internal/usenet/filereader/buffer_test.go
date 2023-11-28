@@ -684,7 +684,9 @@ func TestBuffer_Close(t *testing.T) {
 				maxDownloadRetries:       5,
 				maxAheadDownloadSegments: 0,
 			},
-			log: slog.Default(),
+			log:         slog.Default(),
+			closed:      make(chan bool),
+			nextSegment: make(chan *nzb.NzbSegment),
 		}
 
 		err := buf.Close()
@@ -715,9 +717,10 @@ func TestBuffer_Close(t *testing.T) {
 				maxDownloadRetries:       5,
 				maxAheadDownloadSegments: 1,
 			},
-			log:    slog.Default(),
-			closed: closed,
-			wg:     &sync.WaitGroup{},
+			log:         slog.Default(),
+			closed:      closed,
+			nextSegment: make(chan *nzb.NzbSegment),
+			wg:          &sync.WaitGroup{},
 		}
 
 		wg := &sync.WaitGroup{}
@@ -853,7 +856,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 			log: slog.Default(),
 		}
 		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
-		mockPool.EXPECT().GetDownloadConnection(gomock.Any()).Return(nil, errors.New("error")).Times(5)
+		mockPool.EXPECT().GetDownloadConnection(gomock.Any()).Return(nil, errors.New("error")).Times(1)
 
 		_, err := buf.downloadSegment(context.Background(), segment, groups)
 		assert.Error(t, err)
