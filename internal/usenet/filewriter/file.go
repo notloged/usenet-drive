@@ -188,7 +188,7 @@ func (f *file) ReadFrom(src io.Reader) (int64, error) {
 					retry.Delay(1*time.Second),
 					retry.DelayType(retry.FixedDelay),
 					retry.OnRetry(func(n uint, err error) {
-						f.log.Info("Error getting connection for upload. Retrying", "error", err, "segment", i, "retry", n)
+						f.log.DebugContext(ctx, "Error getting connection for upload. Retrying", "error", err, "segment", i, "retry", n)
 					}),
 					retry.RetryIf(func(err error) bool {
 						return nntpcli.IsRetryableError(err)
@@ -425,7 +425,7 @@ func (f *file) addSegment(ctx context.Context, conn connectionpool.Resource, seg
 		retry.DelayType(retry.BackOffDelay),
 		retry.OnRetry(func(n uint, err error) {
 			l := log.With("retry", n)
-			l.InfoContext(ctx, "Retrying upload", "error", err, "retry", n)
+			l.DebugContext(ctx, "Retrying upload", "error", err, "retry", n)
 
 			if conn != nil {
 				f.cp.Close(conn)
@@ -457,7 +457,7 @@ func (f *file) addSegment(ctx context.Context, conn connectionpool.Resource, seg
 		}
 		conn = nil
 
-		log.Error("Error uploading segment.", "error", errors.Unwrap(err))
+		log.Error("Error uploading segment.", "error", err)
 		return fmt.Errorf("error uploading segment, all retries exhausted. %w", err)
 	}
 

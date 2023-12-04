@@ -128,7 +128,7 @@ func (p *connectionPool) GetUploadConnection(ctx context.Context) (Resource, err
 	}
 
 	if conn == nil {
-		return p.GetDownloadConnection(ctx)
+		return p.GetUploadConnection(ctx)
 	}
 
 	return conn, nil
