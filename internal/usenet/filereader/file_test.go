@@ -257,9 +257,9 @@ func TestCloseFile(t *testing.T) {
 		mockSr.EXPECT().FinishDownload(gomock.Any()).Times(1)
 
 		err := f.Close()
-		assert.Equal(t, os.ErrPermission, err)
+		assert.ErrorIs(t, err, os.ErrPermission)
 
-		assert.True(t, onClosedCalled)
+		assert.False(t, onClosedCalled)
 	})
 
 	t.Run("Success", func(t *testing.T) {

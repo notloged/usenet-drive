@@ -118,9 +118,13 @@ func (f *file) Chown(uid, gid int) error {
 }
 
 func (f *file) Close() error {
-	f.sr.FinishDownload(f.sessionId)
+	defer f.sr.FinishDownload(f.sessionId)
 
-	if err := f.buffer.Close(); err != nil {
+	err := f.innerFile.Close()
+	err2 := f.buffer.Close()
+
+	err = errors.Join(err, err2)
+	if err != nil {
 		return err
 	}
 
@@ -130,7 +134,7 @@ func (f *file) Close() error {
 		}
 	}
 
-	return f.innerFile.Close()
+	return nil
 }
 
 func (f *file) Fd() uintptr {

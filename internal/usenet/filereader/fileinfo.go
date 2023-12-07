@@ -53,13 +53,18 @@ func NewFileInfoWithStat(
 	}
 
 	reader := nzbloader.NewNzbReader(f)
+	defer func() {
+		reader.Close()
+		if err := f.Close(); err != nil {
+			log.Error(fmt.Sprintf("Error closing file %s", path), "error", err)
+		}
+	}()
 
 	metadata, err = reader.GetMetadata()
 	if err != nil {
 		log.Error(fmt.Sprintf("Error getting metadata for file %s, this file will be ignored", path), "error", err)
 		return nil, errors.Join(err, ErrCorruptedNzb)
 	}
-
 	name := nzbFileStat.Name()
 
 	return &nzbFileInfo{

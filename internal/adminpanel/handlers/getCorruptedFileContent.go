@@ -21,6 +21,7 @@ func GetCorruptedNzbContentHandler(cNzb corruptednzbsmanager.CorruptedNzbsManage
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
+		defer content.Close()
 
 		return c.Stream(http.StatusOK, "application/octet-stream", content)
 	}
