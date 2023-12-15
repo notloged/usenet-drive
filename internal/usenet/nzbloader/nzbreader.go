@@ -21,23 +21,23 @@ type NzbReader interface {
 
 type nzbReader struct {
 	decoder  *xml.Decoder
-	metadata *usenet.Metadata
+	metadata usenet.Metadata
 	groups   []string
-	segments map[int64]*nzb.NzbSegment
+	segments map[int64]nzb.NzbSegment
 	mx       sync.RWMutex
 }
 
 func NewNzbReader(reader io.Reader) NzbReader {
 	return &nzbReader{
 		decoder:  xml.NewDecoder(reader),
-		segments: map[int64]*nzb.NzbSegment{},
+		segments: map[int64]nzb.NzbSegment{},
 	}
 }
 
 func (r *nzbReader) Close() {
 	clear(r.segments)
 	r.segments = nil
-	r.metadata = nil
+	clear(r.groups)
 	r.groups = nil
 }
 
@@ -45,8 +45,8 @@ func (r *nzbReader) GetMetadata() (usenet.Metadata, error) {
 	r.mx.Lock()
 	defer r.mx.Unlock()
 
-	if r.metadata != nil {
-		return *r.metadata, nil
+	if r.metadata.ChunkSize != 0 {
+		return r.metadata, nil
 	}
 
 	metadata := map[string]string{}
@@ -90,7 +90,7 @@ func (r *nzbReader) GetMetadata() (usenet.Metadata, error) {
 				if err != nil {
 					return usenet.Metadata{}, err
 				}
-				r.metadata = &m
+				r.metadata = m
 
 				return m, nil
 			}
@@ -101,7 +101,7 @@ func (r *nzbReader) GetMetadata() (usenet.Metadata, error) {
 }
 
 func (r *nzbReader) GetGroups() ([]string, error) {
-	if r.metadata == nil {
+	if r.metadata.ChunkSize == 0 {
 		// we need to maintain the order of the calls to GetMetadata and GetGroups
 		if _, err := r.GetMetadata(); err != nil {
 			return nil, err
@@ -169,8 +169,8 @@ func (r *nzbReader) GetSegment(segmentIndex int) (nzb.NzbSegment, bool) {
 
 	segmentNumber := int64(segmentIndex + 1)
 	// Check if the segment is already in the cache
-	if r.segments[segmentNumber] != nil {
-		return *r.segments[segmentNumber], true
+	if s, ok := r.segments[segmentNumber]; ok {
+		return s, true
 	}
 
 	// Check if there are more segments to read from the XML stream
@@ -188,7 +188,7 @@ func (r *nzbReader) GetSegment(segmentIndex int) (nzb.NzbSegment, bool) {
 				return nzb.NzbSegment{}, false
 			}
 
-			r.segments[segmentNumber] = &segment
+			r.segments[segmentNumber] = segment
 
 			if segment.Number == segmentNumber {
 				return segment, true
