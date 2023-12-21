@@ -132,7 +132,6 @@ func (v *buffer) Close() error {
 		v.wg.Wait()
 	}
 
-	v.nzbReader.Close()
 	v.nzbReader = nil
 	v.currentDownloading = nil
 	v.cache = nil

@@ -678,7 +678,6 @@ func TestBuffer_Close(t *testing.T) {
 
 	t.Run("Test close buffer", func(t *testing.T) {
 		nzbReader := nzbloader.NewMockNzbReader(ctrl)
-		nzbReader.EXPECT().Close().Return().Times(1)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		t.Cleanup(func() {
@@ -708,7 +707,6 @@ func TestBuffer_Close(t *testing.T) {
 
 	t.Run("Test close buffer with download ahead", func(t *testing.T) {
 		nzbReader := nzbloader.NewMockNzbReader(ctrl)
-		nzbReader.EXPECT().Close().Return().Times(1)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		t.Cleanup(func() {

@@ -13,6 +13,7 @@ import (
 	"github.com/javi11/usenet-drive/internal/usenet"
 	"github.com/javi11/usenet-drive/internal/usenet/connectionpool"
 	"github.com/javi11/usenet-drive/internal/usenet/corruptednzbsmanager"
+	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
 	status "github.com/javi11/usenet-drive/internal/usenet/statusreporter"
 	"github.com/javi11/usenet-drive/pkg/osfs"
 	"github.com/stretchr/testify/assert"
@@ -233,6 +234,8 @@ func TestCloseFile(t *testing.T) {
 	fs := osfs.NewMockFileSystem(ctrl)
 	mockFile := osfs.NewMockFile(ctrl)
 	mockBuffer := NewMockBuffer(ctrl)
+	nzbReader := nzbloader.NewMockNzbReader(ctrl)
+
 	onClosedCalled := false
 	mockSr := status.NewMockStatusReporter(ctrl)
 	t.Run("Error", func(t *testing.T) {
@@ -243,6 +246,7 @@ func TestCloseFile(t *testing.T) {
 			fsMutex:   sync.RWMutex{},
 			log:       log,
 			metadata:  usenet.Metadata{},
+			nzbReader: nzbReader,
 			onClose: func() error {
 				onClosedCalled = true
 				return nil
@@ -251,6 +255,7 @@ func TestCloseFile(t *testing.T) {
 			fs:   fs,
 			sr:   mockSr,
 		}
+		nzbReader.EXPECT().Close().Return().Times(1)
 		mockFile.EXPECT().Close().Return(os.ErrPermission).Times(1)
 		mockBuffer.EXPECT().Close().Return(nil).Times(1)
 		mockSr.EXPECT().FinishDownload(gomock.Any()).Times(1)
@@ -269,6 +274,7 @@ func TestCloseFile(t *testing.T) {
 			fsMutex:   sync.RWMutex{},
 			log:       log,
 			metadata:  usenet.Metadata{},
+			nzbReader: nzbReader,
 			onClose: func() error {
 				onClosedCalled = true
 				return nil
@@ -277,6 +283,7 @@ func TestCloseFile(t *testing.T) {
 			fs:   fs,
 			sr:   mockSr,
 		}
+		nzbReader.EXPECT().Close().Return().Times(1)
 		mockFile.EXPECT().Close().Return(nil).Times(1)
 		mockBuffer.EXPECT().Close().Return(nil).Times(1)
 		mockSr.EXPECT().FinishDownload(gomock.Any()).Times(1)
@@ -295,6 +302,7 @@ func TestCloseFile(t *testing.T) {
 			fsMutex:   sync.RWMutex{},
 			log:       log,
 			metadata:  usenet.Metadata{},
+			nzbReader: nzbReader,
 			onClose: func() error {
 				onClosedCalled = true
 				return nil
@@ -304,6 +312,7 @@ func TestCloseFile(t *testing.T) {
 			sr:   mockSr,
 		}
 		f.onClose = nil
+		nzbReader.EXPECT().Close().Return().Times(1)
 		mockFile.EXPECT().Close().Return(nil).Times(1)
 		mockBuffer.EXPECT().Close().Return(nil).Times(1)
 		mockSr.EXPECT().FinishDownload(gomock.Any()).Times(1)
