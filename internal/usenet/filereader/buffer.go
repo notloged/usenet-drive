@@ -16,7 +16,7 @@ import (
 	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
 	"github.com/javi11/usenet-drive/pkg/nntpcli"
 	"github.com/javi11/usenet-drive/pkg/nzb"
-	"github.com/javi11/usenet-drive/pkg/yenc"
+	"github.com/mnightingale/rapidyenc"
 )
 
 var (
@@ -254,6 +254,7 @@ func (v *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, gr
 	if err == nil {
 		chunk = hit
 	} else {
+		chunk = make([]byte, v.chunkSize)
 		var conn connectionpool.Resource
 		retryErr := retry.Do(func() error {
 			c, err := v.cp.GetDownloadConnection(ctx)
@@ -286,12 +287,16 @@ func (v *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, gr
 				return fmt.Errorf("error getting body: %w", err)
 			}
 
-			yread, err := yenc.Decode(body)
+			decoder := rapidyenc.AcquireDecoder()
+			defer rapidyenc.ReleaseDecoder(decoder)
+			decoder.SetReader(body)
+
+			b, err := io.ReadAll(decoder)
 			if err != nil {
-				return retry.Unrecoverable(fmt.Errorf("error decoding yenc: %w", err))
+				return fmt.Errorf("error copying body: %w", err)
 			}
 
-			chunk = yread.Body
+			chunk = b
 
 			v.cp.Free(conn)
 			conn = nil
