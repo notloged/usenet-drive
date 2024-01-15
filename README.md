@@ -133,7 +133,7 @@ version: "3"
 services:
   usenet-drive:
     image: laris11/usenet-drive:latest
-    command: /usenet-drive -c /config/config.yaml
+    command: /usenetdrive -c /config/config.yaml
     ports:
       - "8080:8080"
     volumes:
