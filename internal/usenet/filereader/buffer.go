@@ -289,6 +289,11 @@ func (v *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, gr
 
 			decoder := rapidyenc.AcquireDecoder()
 			defer rapidyenc.ReleaseDecoder(decoder)
+			defer func() {
+				if r := recover(); r != nil {
+					v.log.ErrorContext(ctx, "Fatal error decoding the body:", "error", r, "segment", segment.Number)
+				}
+			}()
 			decoder.SetReader(body)
 
 			b, err := io.ReadAll(decoder)

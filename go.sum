@@ -59,6 +59,8 @@ github.com/mnightingale/rapidyenc v0.0.0-20231127201145-8792729266a1 h1:7+GhCY2i
 github.com/mnightingale/rapidyenc v0.0.0-20231127201145-8792729266a1/go.mod h1:SKYCyJoeawOD2xjCqz8pUeW6mMWzouhs8RbbSvEtQws=
 github.com/mnightingale/rapidyenc v0.0.0-20240115132642-f007bf27e863 h1:WpzWgcAozpzHGvvHheZUF4P6F5a83zB5Y3Y2mf5a6Zk=
 github.com/mnightingale/rapidyenc v0.0.0-20240115132642-f007bf27e863/go.mod h1:SKYCyJoeawOD2xjCqz8pUeW6mMWzouhs8RbbSvEtQws=
+github.com/mnightingale/rapidyenc v0.0.0-20240115171133-54849213f6c6 h1:WVdvXZSxmPOVoZPa2osIuMtrnaLv5dh2HwxWph6QLCo=
+github.com/mnightingale/rapidyenc v0.0.0-20240115171133-54849213f6c6/go.mod h1:SKYCyJoeawOD2xjCqz8pUeW6mMWzouhs8RbbSvEtQws=
 github.com/natefinch/lumberjack v2.0.0+incompatible h1:4QJd3OLAMgj7ph+yZTuX13Ld4UpgHp07nNdFX7mqFfM=
 github.com/natefinch/lumberjack v2.0.0+incompatible/go.mod h1:Wi9p2TTF5DG5oU+6YfsmYQpsTIOm0B1VNzQg9Mw6nPk=
 github.com/oxyno-zeta/gomock-extra-matcher v1.2.0 h1:WPEclU0y0PMwUzdDcaKZvld4aXpa3fkzjiUMQdcBEHg=

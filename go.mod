@@ -15,7 +15,7 @@ require (
 	github.com/labstack/echo-contrib v0.15.0
 	github.com/labstack/echo/v4 v4.11.2
 	github.com/mattn/go-sqlite3 v1.14.17
-	github.com/mnightingale/rapidyenc v0.0.0-20240115132642-f007bf27e863
+	github.com/mnightingale/rapidyenc v0.0.0-20240115171133-54849213f6c6
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/oxyno-zeta/gomock-extra-matcher v1.2.0
 	github.com/pressly/goose/v3 v3.15.0
