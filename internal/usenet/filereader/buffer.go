@@ -101,40 +101,40 @@ func NewBuffer(
 //	2 (os.SEEK_END) means relative to the end of the file
 //
 // It returns the new offset and an error, if any.
-func (v *buffer) Seek(offset int64, whence int) (int64, error) {
+func (b *buffer) Seek(offset int64, whence int) (int64, error) {
 	var abs int64
 	switch whence {
 	case io.SeekStart: // Relative to the origin of the file
 		abs = offset
 	case io.SeekCurrent: // Relative to the current offset
-		abs = int64(v.ptr) + offset
+		abs = int64(b.ptr) + offset
 	case io.SeekEnd: // Relative to the end
-		abs = int64(v.size) + offset
+		abs = int64(b.size) + offset
 	default:
 		return 0, ErrInvalidWhence
 	}
 	if abs < 0 {
 		return 0, ErrSeekNegative
 	}
-	if abs > int64(v.size) {
+	if abs > int64(b.size) {
 		return 0, ErrSeekTooFar
 	}
-	v.ptr = abs
+	b.ptr = abs
 
 	return abs, nil
 }
 
 // Close the buffer. Currently no effect.
-func (v *buffer) Close() error {
-	close(v.nextSegment)
+func (b *buffer) Close() error {
+	close(b.nextSegment)
 
-	if v.dc.maxAheadDownloadSegments > 0 {
-		v.wg.Wait()
+	if b.dc.maxAheadDownloadSegments > 0 {
+		b.wg.Wait()
 	}
 
-	v.nzbReader = nil
-	v.currentDownloading = nil
-	v.cache = nil
+	b.nzbReader = nil
+	b.currentDownloading = nil
+	b.cache = nil
 
 	return nil
 }
@@ -142,40 +142,40 @@ func (v *buffer) Close() error {
 // Read reads len(p) byte from the Buffer starting at the current offset.
 // It returns the number of bytes read and an error if any.
 // Returns io.EOF error if pointer is at the end of the Buffer.
-func (v *buffer) Read(p []byte) (int, error) {
+func (b *buffer) Read(p []byte) (int, error) {
 	n := 0
 
 	if len(p) == 0 {
 		return n, nil
 	}
-	if v.ptr >= int64(v.size) {
+	if b.ptr >= int64(b.size) {
 		return n, io.EOF
 	}
 
-	currentSegmentIndex := int(float64(v.ptr) / float64(v.chunkSize))
-	beginReadAt := max((int(v.ptr) - (currentSegmentIndex * v.chunkSize)), 0)
+	currentSegmentIndex := int(float64(b.ptr) / float64(b.chunkSize))
+	beginReadAt := max((int(b.ptr) - (currentSegmentIndex * b.chunkSize)), 0)
 
 	for i := 0; ; i++ {
 		if n >= len(p) {
 			break
 		}
 
-		segment, hasMore := v.nzbReader.GetSegment(currentSegmentIndex + i)
+		segment, hasMore := b.nzbReader.GetSegment(currentSegmentIndex + i)
 		if !hasMore {
 			break
 		}
 
 		nextSegmentIndex := currentSegmentIndex + i + 1
 		// Preload next segments
-		for j := 0; j < v.dc.maxAheadDownloadSegments; j++ {
+		for j := 0; j < b.dc.maxAheadDownloadSegments; j++ {
 			nextSegmentIndex := nextSegmentIndex + j
 			// Preload next segments
-			if nextSegment, hasMore := v.nzbReader.GetSegment(nextSegmentIndex); hasMore && !v.cache.Has(nextSegment.Id) {
-				v.nextSegment <- nextSegment
+			if nextSegment, hasMore := b.nzbReader.GetSegment(nextSegmentIndex); hasMore && !b.cache.Has(nextSegment.Id) {
+				b.nextSegment <- nextSegment
 			}
 		}
 
-		chunk, err := v.downloadSegment(v.ctx, segment, v.nzbGroups)
+		chunk, err := b.getSegment(b.ctx, segment, b.nzbGroups)
 		if err != nil {
 			// If nzb is corrupted stop reading
 			if errors.Is(err, ErrCorruptedNzb) {
@@ -188,7 +188,7 @@ func (v *buffer) Read(p []byte) (int, error) {
 		chunk = nil
 		beginReadAt = 0
 	}
-	v.ptr += int64(n)
+	b.ptr += int64(n)
 
 	return n, nil
 }
@@ -197,40 +197,40 @@ func (v *buffer) Read(p []byte) (int, error) {
 // It returns the number of bytes read and the error, if any.
 // ReadAt always returns a non-nil error when n < len(b).
 // At end of file, that error is io.EOF.
-func (v *buffer) ReadAt(p []byte, off int64) (int, error) {
+func (b *buffer) ReadAt(p []byte, off int64) (int, error) {
 	n := 0
 
 	if len(p) == 0 {
 		return n, nil
 	}
-	if off >= int64(v.size) {
+	if off >= int64(b.size) {
 		return n, io.EOF
 	}
 
-	currentSegmentIndex := int(float64(off) / float64(v.chunkSize))
-	beginReadAt := max((int(off) - (currentSegmentIndex * v.chunkSize)), 0)
+	currentSegmentIndex := int(float64(off) / float64(b.chunkSize))
+	beginReadAt := max((int(off) - (currentSegmentIndex * b.chunkSize)), 0)
 
 	for i := 0; ; i++ {
 		if n >= len(p) {
 			break
 		}
 
-		segment, hasMore := v.nzbReader.GetSegment(currentSegmentIndex + i)
+		segment, hasMore := b.nzbReader.GetSegment(currentSegmentIndex + i)
 		if !hasMore {
 			break
 		}
 
 		nextSegmentIndex := currentSegmentIndex + i + 1
 		// Preload next segments
-		for j := 0; j < v.dc.maxAheadDownloadSegments; j++ {
+		for j := 0; j < b.dc.maxAheadDownloadSegments; j++ {
 			nextSegmentIndex := nextSegmentIndex + j
 			// Preload next segments
-			if nextSegment, hasMore := v.nzbReader.GetSegment(nextSegmentIndex); hasMore && !v.cache.Has(nextSegment.Id) {
-				v.nextSegment <- nextSegment
+			if nextSegment, hasMore := b.nzbReader.GetSegment(nextSegmentIndex); hasMore && !b.cache.Has(nextSegment.Id) {
+				b.nextSegment <- nextSegment
 			}
 		}
 
-		chunk, err := v.downloadSegment(v.ctx, segment, v.nzbGroups)
+		chunk, err := b.getSegment(b.ctx, segment, b.nzbGroups)
 		if err != nil {
 			// If nzb is corrupted stop reading
 			if errors.Is(err, ErrCorruptedNzb) {
@@ -247,127 +247,144 @@ func (v *buffer) ReadAt(p []byte, off int64) (int, error) {
 	return n, nil
 }
 
-func (v *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, groups []string) ([]byte, error) {
-	hit, err := v.cache.Get(segment.Id)
-
-	var chunk []byte
+func (b *buffer) getSegment(ctx context.Context, segment nzb.NzbSegment, groups []string) ([]byte, error) {
+	hit, err := b.cache.Get(segment.Id)
 	if err == nil {
-		chunk = hit
-	} else {
-		chunk = make([]byte, v.chunkSize)
-		var conn connectionpool.Resource
-		retryErr := retry.Do(func() error {
-			c, err := v.cp.GetDownloadConnection(ctx)
-			if err != nil {
-				if conn != nil {
-					v.cp.Close(conn)
-					conn = nil
-				}
+		return hit, nil
+	}
 
-				if errors.Is(err, context.Canceled) {
-					return err
-				}
+	chunk, err := b.downloadSegment(ctx, segment, groups)
+	if err != nil {
+		return nil, err
+	}
 
-				v.log.ErrorContext(ctx, "Error getting nntp connection:", "error", err, "segment", segment.Number)
+	err = b.cache.Set(segment.Id, chunk)
+	if err != nil {
+		b.log.ErrorContext(ctx, "Error caching segment.", "error", err, "segment", segment.Number)
+	}
 
-				return fmt.Errorf("error getting nntp connection: %w", err)
-			}
-			conn = c
-			nntpConn := conn.Value()
+	return chunk, err
+}
 
-			if nntpConn.Provider().JoinGroup {
-				err = usenet.JoinGroup(nntpConn, groups)
-				if err != nil {
-					return fmt.Errorf("error joining group: %w", err)
-				}
-			}
-
-			body, err := nntpConn.Body(fmt.Sprintf("<%v>", segment.Id))
-			if err != nil {
-				return fmt.Errorf("error getting body: %w", err)
-			}
-
-			decoder := rapidyenc.AcquireDecoder()
-			defer rapidyenc.ReleaseDecoder(decoder)
-			decoder.SetReader(body)
-
-			b, err := io.ReadAll(decoder)
-			if err != nil {
-				return fmt.Errorf("error decoding the body: %w", err)
-			}
-
-			chunk = b
-
-			v.cp.Free(conn)
-			conn = nil
-
-			return nil
-		},
-			retry.Context(ctx),
-			retry.Attempts(uint(v.dc.maxDownloadRetries)),
-			retry.DelayType(retry.FixedDelay),
-			retry.RetryIf(func(err error) bool {
-				return nntpcli.IsRetryableError(err)
-			}),
-			retry.OnRetry(func(n uint, err error) {
-				v.log.DebugContext(ctx, "Retrying download", "error", err, "segment", segment.Id, "retry", n)
-
-				if conn != nil {
-					v.cp.Close(conn)
-					conn = nil
-				}
-			}),
-		)
-		if retryErr != nil {
-			err := retryErr
-
+func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, groups []string) ([]byte, error) {
+	var chunk []byte
+	var conn connectionpool.Resource
+	retryErr := retry.Do(func() error {
+		c, err := b.cp.GetDownloadConnection(ctx)
+		if err != nil {
 			if conn != nil {
-				v.cp.Close(conn)
+				b.cp.Close(conn)
 				conn = nil
 			}
 
-			var e retry.Error
-			if errors.As(err, &e) {
-				err = errors.Join(e.WrappedErrors()...)
+			if errors.Is(err, context.Canceled) {
+				return err
 			}
 
-			if nntpcli.IsRetryableError(err) || errors.Is(err, context.Canceled) {
-				// do not mark file as corrupted if it's a retryable error
-				return nil, err
-			}
+			b.log.ErrorContext(ctx, "Error getting nntp connection:", "error", err, "segment", segment.Number)
 
-			return nil, errors.Join(ErrCorruptedNzb, err)
+			return fmt.Errorf("error getting nntp connection: %w", err)
+		}
+		conn = c
+		nntpConn := conn.Value()
+
+		if nntpConn.Provider().JoinGroup {
+			err = usenet.JoinGroup(nntpConn, groups)
+			if err != nil {
+				return fmt.Errorf("error joining group: %w", err)
+			}
 		}
 
-		err := v.cache.Set(segment.Id, chunk)
+		body, err := nntpConn.Body(fmt.Sprintf("<%v>", segment.Id))
 		if err != nil {
-			v.log.ErrorContext(ctx, "Error caching segment.", "error", err, "segment", segment.Number)
+			return fmt.Errorf("error getting body: %w", err)
 		}
+
+		decoder := rapidyenc.AcquireDecoder()
+		defer rapidyenc.ReleaseDecoder(decoder)
+		decoder.SetReader(body)
+
+		chunk, err = io.ReadAll(decoder)
+		if err != nil {
+			return fmt.Errorf("error decoding the body: %w", err)
+		}
+
+		b.cp.Free(conn)
+		conn = nil
+
+		return nil
+	},
+		retry.Context(ctx),
+		retry.Attempts(uint(b.dc.maxDownloadRetries)),
+		retry.DelayType(retry.FixedDelay),
+		retry.RetryIf(func(err error) bool {
+			return nntpcli.IsRetryableError(err)
+		}),
+		retry.OnRetry(func(n uint, err error) {
+			b.log.DebugContext(ctx, "Retrying download", "error", err, "segment", segment.Id, "retry", n)
+
+			if conn != nil {
+				b.cp.Close(conn)
+				conn = nil
+			}
+		}),
+	)
+	if retryErr != nil {
+		err := retryErr
+
+		if conn != nil {
+			b.cp.Close(conn)
+			conn = nil
+		}
+
+		var e retry.Error
+		if errors.As(err, &e) {
+			err = errors.Join(e.WrappedErrors()...)
+		}
+
+		if nntpcli.IsRetryableError(err) || errors.Is(err, context.Canceled) {
+			// do not mark file as corrupted if it's a retryable error
+			return nil, err
+		}
+
+		return nil, errors.Join(ErrCorruptedNzb, err)
 	}
 
 	return chunk, nil
 }
 
-func (v *buffer) downloadBoost(ctx context.Context) {
+func (b *buffer) downloadBoost(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case segment, ok := <-v.nextSegment:
+		case segment, ok := <-b.nextSegment:
 			if !ok {
 				return
 			}
 
-			if _, loaded := v.currentDownloading.LoadOrStore(segment.Number, true); loaded {
+			if _, loaded := b.currentDownloading.LoadOrStore(segment.Number, true); loaded {
 				continue
 			}
 
-			_, err := v.downloadSegment(ctx, segment, v.nzbGroups)
-			if err != nil && !errors.Is(err, context.Canceled) {
-				v.log.Error("Error downloading segment.", "error", err, "segment", segment.Number)
+			if b.cache.Has(segment.Id) {
+				continue
 			}
 
-			v.currentDownloading.Delete(segment.Number)
+			chunk, err := b.downloadSegment(ctx, segment, b.nzbGroups)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				b.log.Error("Error downloading segment.", "error", err, "segment", segment.Number)
+			}
+
+			if err == nil {
+				err = b.cache.Set(segment.Id, chunk)
+				if err != nil {
+					b.log.ErrorContext(ctx, "Error caching segment.", "error", err, "segment", segment.Number)
+				}
+			}
+
+			chunk = nil
+			b.currentDownloading.Delete(segment.Number)
 		}
 	}
 }

@@ -179,7 +179,7 @@ func TestBuffer_Read(t *testing.T) {
 		// Segment 1 and 2 are loaded in parallel due to the preload
 		cache.EXPECT().Has("2").Return(false).Times(1)
 		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
-		cache.EXPECT().Get("2").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Has("2").Return(false).Times(1)
 
 		cache.EXPECT().Set("1", gomock.Any()).Return(nil).Times(1)
 		cache.EXPECT().Set("2", gomock.Any()).Return(nil).Times(1)
@@ -195,8 +195,7 @@ func TestBuffer_Read(t *testing.T) {
 		assert.Equal(t, []byte(expectedBody), p[:n])
 
 		// Segment 3 is loaded in parallel due to the preload
-		cache.EXPECT().Has("3").Return(false).Times(1)
-		cache.EXPECT().Get("3").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Has("3").Return(false).Times(2)
 		cache.EXPECT().Set("3", gomock.Any()).Return(nil).Times(1)
 
 		cache.EXPECT().Get("2").Return(bytes.NewBufferString(expectedBody2).Bytes(), nil).Times(1)
@@ -415,7 +414,7 @@ func TestBuffer_ReadAt(t *testing.T) {
 		// Segment 1 and 2 are loaded in parallel due to the preload
 		cache.EXPECT().Has("3").Return(false).Times(1)
 		cache.EXPECT().Get("2").Return(nil, errors.New("not found")).Times(1)
-		cache.EXPECT().Get("3").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Has("3").Return(false).Times(1)
 
 		cache.EXPECT().Set("2", gomock.Any()).Return(nil).Times(1)
 		cache.EXPECT().Set("3", gomock.Any()).Return(nil).Times(1)
@@ -750,7 +749,7 @@ func TestBuffer_Close(t *testing.T) {
 	})
 }
 
-func TestBuffer_downloadSegment(t *testing.T) {
+func TestBuffer_getSegment(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -760,7 +759,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 	segment := nzb.NzbSegment{Id: "1", Number: 1, Bytes: 750000}
 	groups := []string{"group1"}
 
-	t.Run("Test download segment", func(t *testing.T) {
+	t.Run("Test get segment", func(t *testing.T) {
 		nzbReader := nzbloader.NewMockNzbReader(ctrl)
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -801,7 +800,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 		mockConn.EXPECT().Body("<1>").Return(buff, nil).Times(1)
 		cache.EXPECT().Set("1", gomock.Any()).Return(nil).Times(1)
 
-		part, err := buf.downloadSegment(context.Background(), segment, groups)
+		part, err := buf.getSegment(context.Background(), segment, groups)
 		assert.NoError(t, err)
 		assert.Equal(t, []byte("body1"), part)
 	})
@@ -838,7 +837,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 		cache.EXPECT().Get("1").Return(bytes.NewBufferString(expectedBody1).Bytes(), nil).Times(1)
 
 		mockPool.EXPECT().GetDownloadConnection(gomock.Any()).Return(mockResource, nil).Times(0)
-		partCached, err := buf.downloadSegment(context.Background(), segment, groups)
+		partCached, err := buf.getSegment(context.Background(), segment, groups)
 		assert.NoError(t, err)
 		assert.Equal(t, []byte("body1"), partCached)
 	})
@@ -870,7 +869,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
 		mockPool.EXPECT().GetDownloadConnection(gomock.Any()).Return(nil, errors.New("error")).Times(1)
 
-		_, err := buf.downloadSegment(context.Background(), segment, groups)
+		_, err := buf.getSegment(context.Background(), segment, groups)
 		assert.Error(t, err)
 	})
 
@@ -909,7 +908,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 		mockPool.EXPECT().Close(mockResource).Times(1)
 		mockConn.EXPECT().JoinGroup("group1").Return(nntpcli.Group{}, errors.New("error")).Times(1)
 
-		_, err := buf.downloadSegment(context.Background(), segment, groups)
+		_, err := buf.getSegment(context.Background(), segment, groups)
 		assert.Error(t, err)
 	})
 
@@ -949,7 +948,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 
 		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
 		mockConn.EXPECT().Body("<1>").Return(nil, errors.New("some error")).Times(1)
-		_, err := buf.downloadSegment(context.Background(), segment, groups)
+		_, err := buf.getSegment(context.Background(), segment, groups)
 		assert.ErrorIs(t, err, ErrCorruptedNzb)
 	})
 
@@ -1005,7 +1004,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 		mockConn2.EXPECT().Body("<1>").Return(buff, nil).Times(1)
 		cache.EXPECT().Set("1", gomock.Any()).Return(nil).Times(1)
 
-		part, err := buf.downloadSegment(context.Background(), segment, groups)
+		part, err := buf.getSegment(context.Background(), segment, groups)
 		assert.NoError(t, err)
 		assert.NotNil(t, part)
 		assert.Equal(t, []byte("body1"), part)
@@ -1061,7 +1060,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 
 		mockConn2.EXPECT().Body("<1>").Return(buff, nil).Times(1)
 		cache.EXPECT().Set("1", gomock.Any()).Return(nil).Times(1)
-		part, err := buf.downloadSegment(context.Background(), segment, groups)
+		part, err := buf.getSegment(context.Background(), segment, groups)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, part)
