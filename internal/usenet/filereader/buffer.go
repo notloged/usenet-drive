@@ -383,7 +383,6 @@ func (b *buffer) downloadBoost(ctx context.Context) {
 				}
 			}
 
-			chunk = nil
 			b.currentDownloading.Delete(segment.Number)
 		}
 	}
