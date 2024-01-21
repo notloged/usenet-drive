@@ -34,11 +34,9 @@ func (m *MockCache) EXPECT() *MockCacheMockRecorder {
 }
 
 // Close mocks base method.
-func (m *MockCache) Close() error {
+func (m *MockCache) Close() {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Close")
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "Close")
 }
 
 // Close indicates an expected call of Close.
@@ -48,11 +46,9 @@ func (mr *MockCacheMockRecorder) Close() *gomock.Call {
 }
 
 // Delete mocks base method.
-func (m *MockCache) Delete(key string) error {
+func (m *MockCache) Delete(key string) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", key)
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "Delete", key)
 }
 
 // Delete indicates an expected call of Delete.
@@ -62,12 +58,11 @@ func (mr *MockCacheMockRecorder) Delete(key interface{}) *gomock.Call {
 }
 
 // Get mocks base method.
-func (m *MockCache) Get(key string) ([]byte, error) {
+func (m *MockCache) Get(key string) []byte {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", key)
 	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // Get indicates an expected call of Get.
@@ -91,10 +86,10 @@ func (mr *MockCacheMockRecorder) Has(key interface{}) *gomock.Call {
 }
 
 // Len mocks base method.
-func (m *MockCache) Len() int {
+func (m *MockCache) Len() int64 {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Len")
-	ret0, _ := ret[0].(int)
+	ret0, _ := ret[0].(int64)
 	return ret0
 }
 
@@ -105,11 +100,9 @@ func (mr *MockCacheMockRecorder) Len() *gomock.Call {
 }
 
 // Reset mocks base method.
-func (m *MockCache) Reset() error {
+func (m *MockCache) Reset() {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Reset")
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "Reset")
 }
 
 // Reset indicates an expected call of Reset.
@@ -119,11 +112,9 @@ func (mr *MockCacheMockRecorder) Reset() *gomock.Call {
 }
 
 // Set mocks base method.
-func (m *MockCache) Set(key string, entry []byte) error {
+func (m *MockCache) Set(key string, entry []byte) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Set", key, entry)
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "Set", key, entry)
 }
 
 // Set indicates an expected call of Set.

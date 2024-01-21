@@ -118,8 +118,8 @@ func TestBuffer_Read(t *testing.T) {
 		buff, err := generateYencBuff(expectedBody)
 		require.NoError(t, err)
 
-		cache.EXPECT().Set("1", gomock.Any()).Return(nil).Times(1)
-		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Set("1", gomock.Any()).Times(1)
+		cache.EXPECT().Get("1").Return(nil).Times(1)
 		mockConn.EXPECT().Body("<1>").Return(buff, nil).Times(1)
 		mockConn.EXPECT().JoinGroup("group1").Return(nntpcli.Group{}, nil).Times(1)
 
@@ -178,11 +178,11 @@ func TestBuffer_Read(t *testing.T) {
 
 		// Segment 1 and 2 are loaded in parallel due to the preload
 		cache.EXPECT().Has("2").Return(false).Times(1)
-		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Get("1").Return(nil).Times(1)
 		cache.EXPECT().Has("2").Return(false).Times(1)
 
-		cache.EXPECT().Set("1", gomock.Any()).Return(nil).Times(1)
-		cache.EXPECT().Set("2", gomock.Any()).Return(nil).Times(1)
+		cache.EXPECT().Set("1", gomock.Any()).Times(1)
+		cache.EXPECT().Set("2", gomock.Any()).Times(1)
 
 		p := make([]byte, 5)
 		n, err := buf.Read(p)
@@ -196,9 +196,9 @@ func TestBuffer_Read(t *testing.T) {
 
 		// Segment 3 is loaded in parallel due to the preload
 		cache.EXPECT().Has("3").Return(false).Times(2)
-		cache.EXPECT().Set("3", gomock.Any()).Return(nil).Times(1)
+		cache.EXPECT().Set("3", gomock.Any()).Times(1)
 
-		cache.EXPECT().Get("2").Return(bytes.NewBufferString(expectedBody2).Bytes(), nil).Times(1)
+		cache.EXPECT().Get("2").Return(bytes.NewBufferString(expectedBody2).Bytes()).Times(1)
 
 		n, err = buf.Read(p)
 		assert.NoError(t, err)
@@ -249,12 +249,12 @@ func TestBuffer_Read(t *testing.T) {
 		buff2, err := generateYencBuff(expectedBody2)
 		require.NoError(t, err)
 
-		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
-		cache.EXPECT().Set("1", gomock.Any()).Return(nil).Times(1)
+		cache.EXPECT().Get("1").Return(nil).Times(1)
+		cache.EXPECT().Set("1", gomock.Any()).Times(1)
 		mockConn.EXPECT().Body("<1>").Return(buff1, nil).Times(1)
 
-		cache.EXPECT().Get("2").Return(nil, errors.New("not found")).Times(1)
-		cache.EXPECT().Set("2", gomock.Any()).Return(nil).Times(1)
+		cache.EXPECT().Get("2").Return(nil).Times(1)
+		cache.EXPECT().Set("2", gomock.Any()).Times(1)
 		mockConn.EXPECT().Body("<2>").Return(buff2, nil).Times(1)
 		mockConn.EXPECT().JoinGroup("group1").Return(nntpcli.Group{}, nil).Times(2)
 
@@ -358,8 +358,8 @@ func TestBuffer_ReadAt(t *testing.T) {
 		buff, err := generateYencBuff(expectedBody1)
 		require.NoError(t, err)
 
-		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
-		cache.EXPECT().Set("1", gomock.Any()).Return(nil).Times(1)
+		cache.EXPECT().Get("1").Return(nil).Times(1)
+		cache.EXPECT().Set("1", gomock.Any()).Times(1)
 		mockConn.EXPECT().Body("<1>").Return(buff, nil).Times(1)
 		mockConn.EXPECT().JoinGroup("group1").Return(nntpcli.Group{}, nil).Times(1)
 
@@ -413,11 +413,11 @@ func TestBuffer_ReadAt(t *testing.T) {
 
 		// Segment 1 and 2 are loaded in parallel due to the preload
 		cache.EXPECT().Has("3").Return(false).Times(1)
-		cache.EXPECT().Get("2").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Get("2").Return(nil).Times(1)
 		cache.EXPECT().Has("3").Return(false).Times(1)
 
-		cache.EXPECT().Set("2", gomock.Any()).Return(nil).Times(1)
-		cache.EXPECT().Set("3", gomock.Any()).Return(nil).Times(1)
+		cache.EXPECT().Set("2", gomock.Any()).Times(1)
+		cache.EXPECT().Set("3", gomock.Any()).Times(1)
 
 		p := make([]byte, 5)
 		n, err := buf.ReadAt(p, 5)
@@ -428,7 +428,7 @@ func TestBuffer_ReadAt(t *testing.T) {
 		// wait preload to finish
 		time.Sleep(1000 * time.Millisecond)
 
-		cache.EXPECT().Get("3").Return(bytes.NewBufferString(expectedBody3).Bytes(), nil).Times(1)
+		cache.EXPECT().Get("3").Return(bytes.NewBufferString(expectedBody3).Bytes()).Times(1)
 
 		n, err = buf.ReadAt(p, 10)
 		assert.NoError(t, err)
@@ -480,12 +480,12 @@ func TestBuffer_ReadAt(t *testing.T) {
 		buff2, err := generateYencBuff(expectedBody2)
 		require.NoError(t, err)
 
-		cache.EXPECT().Get("2").Return(nil, errors.New("not found")).Times(1)
-		cache.EXPECT().Set("2", gomock.Any()).Return(nil).Times(1)
+		cache.EXPECT().Get("2").Return(nil).Times(1)
+		cache.EXPECT().Set("2", gomock.Any()).Times(1)
 		mockConn.EXPECT().Body("<2>").Return(buff1, nil).Times(1)
 
-		cache.EXPECT().Get("3").Return(nil, errors.New("not found")).Times(1)
-		cache.EXPECT().Set("3", gomock.Any()).Return(nil).Times(1)
+		cache.EXPECT().Get("3").Return(nil).Times(1)
+		cache.EXPECT().Set("3", gomock.Any()).Times(1)
 		mockConn.EXPECT().Body("<3>").Return(buff2, nil).Times(1)
 		mockConn.EXPECT().JoinGroup("group1").Return(nntpcli.Group{}, nil).Times(2)
 
@@ -795,10 +795,10 @@ func TestBuffer_getSegment(t *testing.T) {
 		buff, err := generateYencBuff(expectedBody1)
 		require.NoError(t, err)
 
-		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Get("1").Return(nil).Times(1)
 		mockConn.EXPECT().JoinGroup("group1").Return(nntpcli.Group{}, nil).Times(1)
 		mockConn.EXPECT().Body("<1>").Return(buff, nil).Times(1)
-		cache.EXPECT().Set("1", gomock.Any()).Return(nil).Times(1)
+		cache.EXPECT().Set("1", gomock.Any()).Times(1)
 
 		part, err := buf.getSegment(context.Background(), segment, groups)
 		assert.NoError(t, err)
@@ -834,7 +834,7 @@ func TestBuffer_getSegment(t *testing.T) {
 
 		expectedBody1 := "body1"
 
-		cache.EXPECT().Get("1").Return(bytes.NewBufferString(expectedBody1).Bytes(), nil).Times(1)
+		cache.EXPECT().Get("1").Return(bytes.NewBufferString(expectedBody1).Bytes()).Times(1)
 
 		mockPool.EXPECT().GetDownloadConnection(gomock.Any()).Return(mockResource, nil).Times(0)
 		partCached, err := buf.getSegment(context.Background(), segment, groups)
@@ -866,7 +866,7 @@ func TestBuffer_getSegment(t *testing.T) {
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
 		}
-		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Get("1").Return(nil).Times(1)
 		mockPool.EXPECT().GetDownloadConnection(gomock.Any()).Return(nil, errors.New("error")).Times(1)
 
 		_, err := buf.getSegment(context.Background(), segment, groups)
@@ -902,7 +902,7 @@ func TestBuffer_getSegment(t *testing.T) {
 		mockResource := connectionpool.NewMockResource(ctrl)
 		mockResource.EXPECT().Value().Return(mockConn).Times(1)
 
-		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Get("1").Return(nil).Times(1)
 
 		mockPool.EXPECT().GetDownloadConnection(gomock.Any()).Return(mockResource, nil).Times(1)
 		mockPool.EXPECT().Close(mockResource).Times(1)
@@ -946,7 +946,7 @@ func TestBuffer_getSegment(t *testing.T) {
 		mockPool.EXPECT().Close(mockResource).Times(1)
 		mockConn.EXPECT().JoinGroup("group1").Return(nntpcli.Group{}, nil).Times(1)
 
-		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Get("1").Return(nil).Times(1)
 		mockConn.EXPECT().Body("<1>").Return(nil, errors.New("some error")).Times(1)
 		_, err := buf.getSegment(context.Background(), segment, groups)
 		assert.ErrorIs(t, err, ErrCorruptedNzb)
@@ -989,7 +989,7 @@ func TestBuffer_getSegment(t *testing.T) {
 		mockPool.EXPECT().GetDownloadConnection(gomock.Any()).Return(mockResource, nil).Times(1)
 		mockPool.EXPECT().Close(mockResource).Times(1)
 
-		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Get("1").Return(nil).Times(1)
 		mockConn.EXPECT().JoinGroup("group1").Return(nntpcli.Group{}, nil).Times(1)
 		mockConn.EXPECT().Body("<1>").Return(nil, &textproto.Error{Code: nntpcli.SegmentAlreadyExistsErrCode}).Times(1)
 
@@ -1002,7 +1002,7 @@ func TestBuffer_getSegment(t *testing.T) {
 		require.NoError(t, err)
 
 		mockConn2.EXPECT().Body("<1>").Return(buff, nil).Times(1)
-		cache.EXPECT().Set("1", gomock.Any()).Return(nil).Times(1)
+		cache.EXPECT().Set("1", gomock.Any()).Times(1)
 
 		part, err := buf.getSegment(context.Background(), segment, groups)
 		assert.NoError(t, err)
@@ -1045,7 +1045,7 @@ func TestBuffer_getSegment(t *testing.T) {
 		mockResource2 := connectionpool.NewMockResource(ctrl)
 		mockResource2.EXPECT().Value().Return(mockConn2).Times(1)
 
-		cache.EXPECT().Get("1").Return(nil, errors.New("not found")).Times(1)
+		cache.EXPECT().Get("1").Return(nil).Times(1)
 		mockPool.EXPECT().GetDownloadConnection(gomock.Any()).Return(mockResource, nil).Times(1)
 		mockPool.EXPECT().Close(mockResource).Times(1)
 		mockConn.EXPECT().JoinGroup("group1").Return(nntpcli.Group{}, textproto.ProtocolError("some error")).Times(1)
@@ -1059,7 +1059,7 @@ func TestBuffer_getSegment(t *testing.T) {
 		require.NoError(t, err)
 
 		mockConn2.EXPECT().Body("<1>").Return(buff, nil).Times(1)
-		cache.EXPECT().Set("1", gomock.Any()).Return(nil).Times(1)
+		cache.EXPECT().Set("1", gomock.Any()).Times(1)
 		part, err := buf.getSegment(context.Background(), segment, groups)
 
 		assert.NoError(t, err)

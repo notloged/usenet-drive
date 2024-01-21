@@ -248,8 +248,8 @@ func (b *buffer) ReadAt(p []byte, off int64) (int, error) {
 }
 
 func (b *buffer) getSegment(ctx context.Context, segment nzb.NzbSegment, groups []string) ([]byte, error) {
-	hit, err := b.cache.Get(segment.Id)
-	if err == nil {
+	hit := b.cache.Get(segment.Id)
+	if hit != nil {
 		return hit, nil
 	}
 
@@ -258,10 +258,7 @@ func (b *buffer) getSegment(ctx context.Context, segment nzb.NzbSegment, groups 
 		return nil, err
 	}
 
-	err = b.cache.Set(segment.Id, chunk)
-	if err != nil {
-		b.log.ErrorContext(ctx, "Error caching segment.", "error", err, "segment", segment.Number)
-	}
+	b.cache.Set(segment.Id, chunk)
 
 	return chunk, err
 }
@@ -377,10 +374,7 @@ func (b *buffer) downloadBoost(ctx context.Context) {
 			}
 
 			if err == nil {
-				err = b.cache.Set(segment.Id, chunk)
-				if err != nil {
-					b.log.ErrorContext(ctx, "Error caching segment.", "error", err, "segment", segment.Number)
-				}
+				b.cache.Set(segment.Id, chunk)
 			}
 
 			b.currentDownloading.Delete(segment.Number)
