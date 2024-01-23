@@ -32,7 +32,7 @@ type Usenet struct {
 type Download struct {
 	MaxAheadDownloadSegments int              `yaml:"max_ahead_download_segments"`
 	MaxRetries               int              `yaml:"max_retries" default:"8"`
-	MaxCacheSizeInMB         int              `yaml:"max_cache_size_in_mb" default:"512"`
+	MaxCacheSizeInMB         int              `yaml:"max_cache_size_in_mb" default:"1000"`
 	Providers                []UsenetProvider `yaml:"providers"`
 }
 

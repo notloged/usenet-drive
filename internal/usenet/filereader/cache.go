@@ -2,7 +2,11 @@ package filereader
 
 //go:generate mockgen -source=./cache.go -destination=./cache_mock.go -package=filereader Cache
 import (
-	"github.com/dgraph-io/ristretto"
+	"context"
+	"log/slog"
+	"time"
+
+	"github.com/allegro/bigcache/v3"
 )
 
 type Cache interface {
@@ -16,65 +20,91 @@ type Cache interface {
 }
 
 type cache struct {
-	engine      *ristretto.Cache
-	segmentSize int
+	engine *bigcache.BigCache
+	log    *slog.Logger
 }
 
-const OneMB = 1024 * 1024
-
-func NewCache(segmentSize, maxCacheSize int, debug bool) (Cache, error) {
-	numOfCounters := int64(((maxCacheSize * OneMB) / segmentSize) * 10)
+func NewCache(segmentSize, maxCacheSize int, debug bool, log *slog.Logger) (Cache, error) {
 	// Download cache
-	engine, err := ristretto.NewCache(&ristretto.Config{
-		NumCounters: numOfCounters,              // number of keys to track frequency
-		MaxCost:     int64(maxCacheSize) * 1e+6, // maximum cost of cache to bytes
-		BufferItems: 64,                         // number of keys per Get buffer.
-		Metrics:     debug,
-	})
+	config := bigcache.Config{
+		// number of shards (must be a power of 2)
+		Shards: 4,
+
+		// time after which entry can be evicted
+		LifeWindow: 5 * time.Minute,
+
+		// Interval between removing expired entries (clean up).
+		// If set to <= 0 then no action is performed.
+		// Setting to < 1 second is counterproductive — bigcache has a one second resolution.
+		CleanWindow: 5 * time.Minute,
+
+		// max entry size in bytes, used only in initial memory allocation
+		MaxEntrySize: segmentSize,
+
+		// prints information about additional memory allocation
+		Verbose: debug,
+
+		// cache will not allocate more memory than this limit, value in MB
+		// if value is reached then the oldest entries can be overridden for the new ones
+		// 0 value means no size limit
+		HardMaxCacheSize: maxCacheSize / 3,
+	}
+
+	engine, err := bigcache.New(context.Background(), config)
 	if err != nil {
 		return nil, err
 	}
 
 	return &cache{
-		segmentSize: segmentSize,
-		engine:      engine,
+		engine: engine,
+		log:    log,
 	}, nil
 }
 
 func (c *cache) Get(key string) []byte {
-	value, found := c.engine.Get(key)
-	if !found {
-		return nil
+	if e, err := c.engine.Get(key); err == nil {
+		return e
 	}
 
-	return value.([]byte)
+	return nil
 }
 
 func (c *cache) Set(key string, entry []byte) {
-	r := make([]byte, len(entry))
-	copy(r, entry)
+	e := make([]byte, len(entry))
+	copy(e, entry)
 
-	c.engine.Set(key, r, int64(c.segmentSize))
-	c.engine.Wait()
+	err := c.engine.Set(key, e)
+	if err != nil {
+		c.log.Error("Error setting cache entry", "key", key, "err", err)
+	}
 }
 
 func (c *cache) Delete(key string) {
-	c.engine.Del(key)
+	err := c.engine.Delete(key)
+	if err != nil {
+		c.log.Error("Error deleting cache entry", "key", key, "err", err)
+	}
 }
 
 func (c *cache) Reset() {
-	c.engine.Clear()
+	err := c.engine.Reset()
+	if err != nil {
+		c.log.Error("Error resetting cache", "err", err)
+	}
 }
 
 func (c *cache) Len() int64 {
-	return c.engine.MaxCost()
+	return int64(c.engine.Len())
 }
 
 func (c *cache) Close() {
-	c.engine.Close()
+	err := c.engine.Close()
+	if err != nil {
+		c.log.Error("Error closing cache", "err", err)
+	}
 }
 
 func (c *cache) Has(key string) bool {
-	_, found := c.engine.Get(key)
-	return found
+	_, err := c.engine.Get(key)
+	return err == nil
 }

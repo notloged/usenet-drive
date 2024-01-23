@@ -42,7 +42,7 @@ func defaultConfig() *Config {
 		fs:                       osfs.New(),
 		maxDownloadRetries:       8,
 		maxAheadDownloadSegments: 1,
-		cacheSizeInMB:            512,
+		cacheSizeInMB:            1000,
 	}
 }
 

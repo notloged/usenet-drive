@@ -30,7 +30,7 @@ func NewFileReader(options ...Option) (*fileReader, error) {
 		option(config)
 	}
 
-	cache, err := NewCache(int(config.segmentSize), config.cacheSizeInMB, config.debug)
+	cache, err := NewCache(int(config.segmentSize), config.cacheSizeInMB, config.debug, config.log)
 	if err != nil {
 		return nil, err
 	}

@@ -185,7 +185,7 @@ The `Download` struct defines the Usenet provider for downloading.
 
 - `max_ahead_download_segments` (string): The maximum number of segments to download ahead. Default value is `1`. Be aware that increasing this value will increase the memory usage and connections usage.
 - `max_retries` (int): The maximum number of retries to download a segment. Default value is `8`.
-- `max_cache_size_in_mb` (int): The maximum size of the cache in MB. Default value is `1024`. WARN the tool will fill all this cache as soon as download start.
+- `max_cache_size_in_mb` (int): The maximum size of the cache in MB. Default value is `1000` (1GB). WARN the tool will fill all this cache as soon as download start.
 - `providers` (UsenetProvider): Usenet providers to download files. (It is recommended an unlimited provider for this)
 
 ## Upload Struct
