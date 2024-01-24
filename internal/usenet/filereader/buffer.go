@@ -133,6 +133,10 @@ func (b *buffer) Close() error {
 	}
 
 	b.nzbReader = nil
+	b.currentDownloading.Range(func(key any, _ any) bool {
+		b.currentDownloading.Delete(key)
+		return true
+	})
 	b.currentDownloading = nil
 	b.cache = nil
 
@@ -364,6 +368,7 @@ func (b *buffer) downloadBoost(ctx context.Context) {
 				continue
 			}
 
+			defer b.currentDownloading.Delete(segment.Number)
 			if b.cache.Has(segment.Id) {
 				continue
 			}
@@ -376,8 +381,6 @@ func (b *buffer) downloadBoost(ctx context.Context) {
 			if err == nil {
 				b.cache.Set(segment.Id, chunk)
 			}
-
-			b.currentDownloading.Delete(segment.Number)
 		}
 	}
 }
