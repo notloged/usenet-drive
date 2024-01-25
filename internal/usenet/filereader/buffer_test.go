@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/mnightingale/rapidyenc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -48,6 +49,7 @@ func TestBuffer_Read(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		// Test empty read
@@ -72,7 +74,8 @@ func TestBuffer_Read(t *testing.T) {
 				maxDownloadRetries:       5,
 				maxAheadDownloadSegments: 0,
 			},
-			log: slog.Default(),
+			log:     slog.Default(),
+			decoder: rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		// Test read past end of buffer
@@ -102,6 +105,7 @@ func TestBuffer_Read(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		// Test read one segment
@@ -230,6 +234,7 @@ func TestBuffer_Read(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		mockConn := nntpcli.NewMockConnection(ctrl)
@@ -291,6 +296,7 @@ func TestBuffer_ReadAt(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		// Test empty read
@@ -315,7 +321,8 @@ func TestBuffer_ReadAt(t *testing.T) {
 				maxDownloadRetries:       5,
 				maxAheadDownloadSegments: 0,
 			},
-			log: slog.Default(),
+			log:     slog.Default(),
+			decoder: rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		// Test read past end of buffer
@@ -343,6 +350,7 @@ func TestBuffer_ReadAt(t *testing.T) {
 			},
 			log:                nil,
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		mockConn := nntpcli.NewMockConnection(ctrl)
@@ -460,6 +468,7 @@ func TestBuffer_ReadAt(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		// Test read two segments
@@ -527,6 +536,7 @@ func TestBuffer_Seek(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		// Test seek start
@@ -555,6 +565,7 @@ func TestBuffer_Seek(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		// Test seek current
@@ -583,6 +594,7 @@ func TestBuffer_Seek(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		// Test seek end
@@ -637,6 +649,7 @@ func TestBuffer_Seek(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		// Test negative position
@@ -659,6 +672,7 @@ func TestBuffer_Seek(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		// Test too far
@@ -698,6 +712,7 @@ func TestBuffer_Close(t *testing.T) {
 			log:                slog.Default(),
 			nextSegment:        make(chan nzb.NzbSegment),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		err := buf.Close()
@@ -729,6 +744,7 @@ func TestBuffer_Close(t *testing.T) {
 			nextSegment:        make(chan nzb.NzbSegment),
 			wg:                 &sync.WaitGroup{},
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		wg := &sync.WaitGroup{}
@@ -781,6 +797,7 @@ func TestBuffer_getSegment(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		mockConn := nntpcli.NewMockConnection(ctrl)
@@ -800,7 +817,7 @@ func TestBuffer_getSegment(t *testing.T) {
 		mockConn.EXPECT().Body("<1>").Return(buff, nil).Times(1)
 		cache.EXPECT().Set("1", gomock.Any()).Times(1)
 
-		part, err := buf.getSegment(context.Background(), segment, groups)
+		part, err := buf.getSegment(context.Background(), segment, groups, buf.decoder)
 		assert.NoError(t, err)
 		assert.Equal(t, []byte("body1"), part)
 	})
@@ -826,6 +843,7 @@ func TestBuffer_getSegment(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 
 		mockConn := nntpcli.NewMockConnection(ctrl)
@@ -837,7 +855,7 @@ func TestBuffer_getSegment(t *testing.T) {
 		cache.EXPECT().Get("1").Return(bytes.NewBufferString(expectedBody1).Bytes()).Times(1)
 
 		mockPool.EXPECT().GetDownloadConnection(gomock.Any()).Return(mockResource, nil).Times(0)
-		partCached, err := buf.getSegment(context.Background(), segment, groups)
+		partCached, err := buf.getSegment(context.Background(), segment, groups, buf.decoder)
 		assert.NoError(t, err)
 		assert.Equal(t, []byte("body1"), partCached)
 	})
@@ -869,7 +887,7 @@ func TestBuffer_getSegment(t *testing.T) {
 		cache.EXPECT().Get("1").Return(nil).Times(1)
 		mockPool.EXPECT().GetDownloadConnection(gomock.Any()).Return(nil, errors.New("error")).Times(1)
 
-		_, err := buf.getSegment(context.Background(), segment, groups)
+		_, err := buf.getSegment(context.Background(), segment, groups, buf.decoder)
 		assert.Error(t, err)
 	})
 
@@ -895,6 +913,7 @@ func TestBuffer_getSegment(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 		mockConn := nntpcli.NewMockConnection(ctrl)
 		mockConn.EXPECT().CurrentJoinedGroup().Return("").Times(1)
@@ -908,7 +927,7 @@ func TestBuffer_getSegment(t *testing.T) {
 		mockPool.EXPECT().Close(mockResource).Times(1)
 		mockConn.EXPECT().JoinGroup("group1").Return(nntpcli.Group{}, errors.New("error")).Times(1)
 
-		_, err := buf.getSegment(context.Background(), segment, groups)
+		_, err := buf.getSegment(context.Background(), segment, groups, buf.decoder)
 		assert.Error(t, err)
 	})
 
@@ -935,6 +954,7 @@ func TestBuffer_getSegment(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 		mockConn := nntpcli.NewMockConnection(ctrl)
 		mockConn.EXPECT().CurrentJoinedGroup().Return("").Times(1)
@@ -948,7 +968,7 @@ func TestBuffer_getSegment(t *testing.T) {
 
 		cache.EXPECT().Get("1").Return(nil).Times(1)
 		mockConn.EXPECT().Body("<1>").Return(nil, errors.New("some error")).Times(1)
-		_, err := buf.getSegment(context.Background(), segment, groups)
+		_, err := buf.getSegment(context.Background(), segment, groups, buf.decoder)
 		assert.ErrorIs(t, err, ErrCorruptedNzb)
 	})
 
@@ -973,6 +993,7 @@ func TestBuffer_getSegment(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 		mockConn := nntpcli.NewMockConnection(ctrl)
 		mockConn.EXPECT().CurrentJoinedGroup().Return("").Times(1)
@@ -1004,7 +1025,7 @@ func TestBuffer_getSegment(t *testing.T) {
 		mockConn2.EXPECT().Body("<1>").Return(buff, nil).Times(1)
 		cache.EXPECT().Set("1", gomock.Any()).Times(1)
 
-		part, err := buf.getSegment(context.Background(), segment, groups)
+		part, err := buf.getSegment(context.Background(), segment, groups, buf.decoder)
 		assert.NoError(t, err)
 		assert.NotNil(t, part)
 		assert.Equal(t, []byte("body1"), part)
@@ -1032,6 +1053,7 @@ func TestBuffer_getSegment(t *testing.T) {
 			},
 			log:                slog.Default(),
 			currentDownloading: &sync.Map{},
+			decoder:            rapidyenc.NewDecoder(defaultBufSize),
 		}
 		mockConn := nntpcli.NewMockConnection(ctrl)
 		mockConn.EXPECT().CurrentJoinedGroup().Return("").Times(1)
@@ -1060,7 +1082,7 @@ func TestBuffer_getSegment(t *testing.T) {
 
 		mockConn2.EXPECT().Body("<1>").Return(buff, nil).Times(1)
 		cache.EXPECT().Set("1", gomock.Any()).Times(1)
-		part, err := buf.getSegment(context.Background(), segment, groups)
+		part, err := buf.getSegment(context.Background(), segment, groups, buf.decoder)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, part)

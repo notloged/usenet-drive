@@ -25,6 +25,8 @@ var (
 	ErrSeekTooFar    = errors.New("seek: too far")
 )
 
+const defaultBufSize = 4096
+
 type Buffer interface {
 	io.ReaderAt
 	io.ReadSeeker
@@ -46,6 +48,7 @@ type buffer struct {
 	nextSegment        chan nzb.NzbSegment
 	wg                 *sync.WaitGroup
 	currentDownloading *sync.Map
+	decoder            *rapidyenc.Decoder
 }
 
 // NewBuffer creates a new data volume based on a buffer
@@ -78,6 +81,7 @@ func NewBuffer(
 		nextSegment:        make(chan nzb.NzbSegment),
 		wg:                 &sync.WaitGroup{},
 		currentDownloading: &sync.Map{},
+		decoder:            rapidyenc.NewDecoder(defaultBufSize),
 	}
 
 	if dc.maxAheadDownloadSegments > 0 {
@@ -179,7 +183,7 @@ func (b *buffer) Read(p []byte) (int, error) {
 			}
 		}
 
-		chunk, err := b.getSegment(b.ctx, segment, b.nzbGroups)
+		chunk, err := b.getSegment(b.ctx, segment, b.nzbGroups, b.decoder)
 		if err != nil {
 			// If nzb is corrupted stop reading
 			if errors.Is(err, ErrCorruptedNzb) {
@@ -234,7 +238,7 @@ func (b *buffer) ReadAt(p []byte, off int64) (int, error) {
 			}
 		}
 
-		chunk, err := b.getSegment(b.ctx, segment, b.nzbGroups)
+		chunk, err := b.getSegment(b.ctx, segment, b.nzbGroups, b.decoder)
 		if err != nil {
 			// If nzb is corrupted stop reading
 			if errors.Is(err, ErrCorruptedNzb) {
@@ -251,13 +255,13 @@ func (b *buffer) ReadAt(p []byte, off int64) (int, error) {
 	return n, nil
 }
 
-func (b *buffer) getSegment(ctx context.Context, segment nzb.NzbSegment, groups []string) ([]byte, error) {
+func (b *buffer) getSegment(ctx context.Context, segment nzb.NzbSegment, groups []string, decoder *rapidyenc.Decoder) ([]byte, error) {
 	hit := b.cache.Get(segment.Id)
 	if hit != nil {
 		return hit, nil
 	}
 
-	chunk, err := b.downloadSegment(ctx, segment, groups)
+	chunk, err := b.downloadSegment(ctx, segment, groups, decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +271,7 @@ func (b *buffer) getSegment(ctx context.Context, segment nzb.NzbSegment, groups 
 	return chunk, err
 }
 
-func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, groups []string) ([]byte, error) {
+func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, groups []string, decoder *rapidyenc.Decoder) ([]byte, error) {
 	var chunk []byte
 	var conn connectionpool.Resource
 	retryErr := retry.Do(func() error {
@@ -301,8 +305,7 @@ func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, gr
 			return fmt.Errorf("error getting body: %w", err)
 		}
 
-		decoder := rapidyenc.AcquireDecoder()
-		defer rapidyenc.ReleaseDecoder(decoder)
+		defer decoder.Reset()
 		decoder.SetReader(body)
 
 		chunk, err = io.ReadAll(decoder)
@@ -355,6 +358,7 @@ func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, gr
 }
 
 func (b *buffer) downloadBoost(ctx context.Context) {
+	decoder := rapidyenc.NewDecoder(defaultBufSize)
 	for {
 		select {
 		case <-ctx.Done():
@@ -373,7 +377,7 @@ func (b *buffer) downloadBoost(ctx context.Context) {
 				continue
 			}
 
-			chunk, err := b.downloadSegment(ctx, segment, b.nzbGroups)
+			chunk, err := b.downloadSegment(ctx, segment, b.nzbGroups, decoder)
 			if err != nil && !errors.Is(err, context.Canceled) {
 				b.log.Error("Error downloading segment.", "error", err, "segment", segment.Number)
 			}
