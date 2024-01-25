@@ -132,6 +132,9 @@ func (b *buffer) Seek(offset int64, whence int) (int64, error) {
 func (b *buffer) Close() error {
 	close(b.nextSegment)
 
+	b.decoder.Reset()
+	b.decoder = nil
+
 	if b.dc.maxAheadDownloadSegments > 0 {
 		b.wg.Wait()
 	}
@@ -359,6 +362,11 @@ func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, gr
 
 func (b *buffer) downloadBoost(ctx context.Context) {
 	decoder := rapidyenc.NewDecoder(defaultBufSize)
+	defer func() {
+		decoder.Reset()
+		decoder = nil
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
