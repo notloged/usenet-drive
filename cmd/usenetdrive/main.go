@@ -96,7 +96,7 @@ var rootCmd = &cobra.Command{
 
 		// Status reporter
 		sr := status.NewStatusReporter()
-		ticker := time.NewTicker(1 * time.Second)
+		ticker := time.NewTicker(5 * time.Second)
 		go sr.Start(ctx, ticker)
 
 		// Server info
