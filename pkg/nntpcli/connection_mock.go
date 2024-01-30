@@ -49,10 +49,10 @@ func (mr *MockConnectionMockRecorder) Authenticate() *gomock.Call {
 }
 
 // Body mocks base method.
-func (m *MockConnection) Body(msgId string) (io.Reader, error) {
+func (m *MockConnection) Body(msgId string) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Body", msgId)
-	ret0, _ := ret[0].(io.Reader)
+	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -35,8 +35,8 @@ func (c *fakeConnection) Close() error {
 	return nil
 }
 
-func (c *fakeConnection) Body(msgId string) (io.Reader, error) {
-	return nil, nil
+func (c *fakeConnection) Body(msgId string) ([]byte, error) {
+	return []byte{}, nil
 }
 
 func (c *fakeConnection) Post(r io.Reader) error {

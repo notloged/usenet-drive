@@ -2,10 +2,16 @@
 package nntpcli
 
 import (
+	"bufio"
+	"fmt"
 	"io"
 	"net"
 	"net/textproto"
+
+	"github.com/mnightingale/rapidyenc"
 )
+
+const defaultBufSize = 4096
 
 type Provider struct {
 	Host           string
@@ -20,7 +26,7 @@ type Connection interface {
 	io.Closer
 	Authenticate() (err error)
 	JoinGroup(name string) error
-	Body(msgId string) (io.Reader, error)
+	Body(msgId string) ([]byte, error)
 	Post(r io.Reader) error
 	Provider() Provider
 	CurrentJoinedGroup() string
@@ -31,6 +37,7 @@ type connection struct {
 	netconn            net.Conn
 	provider           Provider
 	currentJoinedGroup string
+	decoder            *rapidyenc.Decoder
 }
 
 func newConnection(netconn net.Conn, provider Provider) (Connection, error) {
@@ -45,6 +52,7 @@ func newConnection(netconn net.Conn, provider Provider) (Connection, error) {
 				conn:     conn,
 				netconn:  netconn,
 				provider: provider,
+				decoder:  rapidyenc.NewDecoder(defaultBufSize),
 			}, nil
 		}
 		conn.Close()
@@ -55,11 +63,15 @@ func newConnection(netconn net.Conn, provider Provider) (Connection, error) {
 		conn:     conn,
 		netconn:  netconn,
 		provider: provider,
+		decoder:  rapidyenc.NewDecoder(defaultBufSize),
 	}, nil
 }
 
 // Close this client.
 func (c *connection) Close() error {
+	c.decoder.Reset()
+	c.decoder = nil
+
 	return c.conn.Close()
 }
 
@@ -123,8 +135,8 @@ func (c *connection) CurrentJoinedGroup() string {
 	return c.currentJoinedGroup
 }
 
-// Body gets the body of an article
-func (c *connection) Body(msgId string) (io.Reader, error) {
+// Body gets the decoded body of an article
+func (c *connection) Body(msgId string) ([]byte, error) {
 	id, err := c.conn.Cmd("BODY %s", msgId)
 	// A bit of synchronization weirdness. If one of the cmd sends in a pipeline fail
 	// while another is waiting for a response, we want to signal that our response has
@@ -139,7 +151,16 @@ func (c *connection) Body(msgId string) (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.conn.R, nil
+
+	defer c.decoder.Reset()
+	c.decoder.SetReader(bufio.NewReader(c.conn.R))
+
+	chunk, err := io.ReadAll(c.decoder)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding the body: %w", err)
+	}
+
+	return chunk, nil
 }
 
 // Post a new article

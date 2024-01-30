@@ -9,6 +9,7 @@ import (
 	"net/textproto"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/bool64/cache"
 	"github.com/golang/mock/gomock"
@@ -134,7 +135,7 @@ func TestBuffer_Read(t *testing.T) {
 			cp:             mockPool,
 			chunkSize:      5,
 			dc: downloadConfig{
-				maxDownloadRetries: 5,
+				maxDownloadRetries: 3,
 				maxDownloadWorkers: 0,
 				maxBufferSizeInMb:  30,
 			},
@@ -144,7 +145,7 @@ func TestBuffer_Read(t *testing.T) {
 
 		p := make([]byte, 5)
 		_, err := buf.Read(p)
-		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+		assert.ErrorIs(t, err, io.ErrNoProgress)
 	})
 
 	t.Run("TestBuffer_Read_TwoSegments", func(t *testing.T) {
@@ -620,7 +621,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 		expectedBody1 := "body1"
 
 		mockConn.EXPECT().JoinGroup("group1").Return(nil).Times(1)
-		mockConn.EXPECT().Body("<1>").Return(bytes.NewReader([]byte(expectedBody1)), nil).Times(1)
+		mockConn.EXPECT().Body("<1>").Return([]byte(expectedBody1), nil).Times(1)
 
 		decoder := &decoderMock{
 			buf: &bytes.Buffer{},
@@ -629,7 +630,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 			decoder.Reset()
 		})
 
-		part, err := buf.downloadSegment(context.Background(), segment, groups, decoder)
+		part, err := buf.downloadSegment(context.Background(), segment, groups)
 		assert.NoError(t, err)
 		assert.Equal(t, []byte("body1"), part)
 	})
@@ -667,7 +668,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 			decoder.Reset()
 		})
 
-		_, err := buf.downloadSegment(context.Background(), segment, groups, decoder)
+		_, err := buf.downloadSegment(context.Background(), segment, groups)
 		assert.Error(t, err)
 	})
 
@@ -711,7 +712,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 			decoder.Reset()
 		})
 
-		_, err := buf.downloadSegment(context.Background(), segment, groups, decoder)
+		_, err := buf.downloadSegment(context.Background(), segment, groups)
 		assert.Error(t, err)
 	})
 
@@ -758,7 +759,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 			decoder.Reset()
 		})
 
-		_, err := buf.downloadSegment(context.Background(), segment, groups, decoder)
+		_, err := buf.downloadSegment(context.Background(), segment, groups)
 		assert.ErrorIs(t, err, ErrCorruptedNzb)
 	})
 
@@ -787,9 +788,10 @@ func TestBuffer_downloadSegment(t *testing.T) {
 		}
 		mockConn := nntpcli.NewMockConnection(ctrl)
 		mockConn.EXPECT().CurrentJoinedGroup().Return("").Times(1)
-		mockConn.EXPECT().Provider().Return(nntpcli.Provider{JoinGroup: true}).Times(1)
+		mockConn.EXPECT().Provider().Return(nntpcli.Provider{JoinGroup: true}).Times(2)
 		mockResource := connectionpool.NewMockResource(ctrl)
-		mockResource.EXPECT().Value().Return(mockConn).Times(1)
+		mockResource.EXPECT().Value().Return(mockConn).Times(2)
+		mockResource.EXPECT().CreationTime().Return(time.Now()).Times(1)
 
 		mockConn2 := nntpcli.NewMockConnection(ctrl)
 		mockConn2.EXPECT().CurrentJoinedGroup().Return("").Times(1)
@@ -809,7 +811,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 
 		expectedBody1 := "body1"
 
-		mockConn2.EXPECT().Body("<1>").Return(bytes.NewReader([]byte(expectedBody1)), nil).Times(1)
+		mockConn2.EXPECT().Body("<1>").Return([]byte(expectedBody1), nil).Times(1)
 
 		decoder := &decoderMock{
 			buf: &bytes.Buffer{},
@@ -818,7 +820,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 			decoder.Reset()
 		})
 
-		part, err := buf.downloadSegment(context.Background(), segment, groups, decoder)
+		part, err := buf.downloadSegment(context.Background(), segment, groups)
 		assert.NoError(t, err)
 		assert.NotNil(t, part)
 		assert.Equal(t, []byte("body1"), part)
@@ -850,9 +852,10 @@ func TestBuffer_downloadSegment(t *testing.T) {
 		}
 		mockConn := nntpcli.NewMockConnection(ctrl)
 		mockConn.EXPECT().CurrentJoinedGroup().Return("").Times(1)
-		mockConn.EXPECT().Provider().Return(nntpcli.Provider{JoinGroup: true}).Times(1)
+		mockConn.EXPECT().Provider().Return(nntpcli.Provider{JoinGroup: true}).Times(2)
 		mockResource := connectionpool.NewMockResource(ctrl)
-		mockResource.EXPECT().Value().Return(mockConn).Times(1)
+		mockResource.EXPECT().Value().Return(mockConn).Times(2)
+		mockResource.EXPECT().CreationTime().Return(time.Now()).Times(1)
 
 		mockConn2 := nntpcli.NewMockConnection(ctrl)
 		mockConn2.EXPECT().CurrentJoinedGroup().Return("").Times(1)
@@ -870,7 +873,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 
 		expectedBody1 := "body1"
 
-		mockConn2.EXPECT().Body("<1>").Return(bytes.NewReader([]byte(expectedBody1)), nil).Times(1)
+		mockConn2.EXPECT().Body("<1>").Return([]byte(expectedBody1), nil).Times(1)
 
 		decoder := &decoderMock{
 			buf: &bytes.Buffer{},
@@ -879,7 +882,7 @@ func TestBuffer_downloadSegment(t *testing.T) {
 			decoder.Reset()
 		})
 
-		part, err := buf.downloadSegment(context.Background(), segment, groups, decoder)
+		part, err := buf.downloadSegment(context.Background(), segment, groups)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, part)

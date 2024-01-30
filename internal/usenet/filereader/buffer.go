@@ -3,7 +3,6 @@ package filereader
 //go:generate mockgen -source=./buffer.go -destination=./buffer_mock.go -package=filereader Buffer
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -20,7 +19,6 @@ import (
 	"github.com/javi11/usenet-drive/internal/usenet/nzbloader"
 	"github.com/javi11/usenet-drive/pkg/nntpcli"
 	"github.com/javi11/usenet-drive/pkg/nzb"
-	"github.com/mnightingale/rapidyenc"
 )
 
 var (
@@ -54,6 +52,7 @@ type buffer struct {
 	wg                 *sync.WaitGroup
 	currentDownloading *sync.Map
 	filePath           string
+	readTimeout        *time.Timer
 }
 
 // NewBuffer creates a new data volume based on a buffer
@@ -97,7 +96,7 @@ func NewBuffer(
 		cp:                 cp,
 		dc:                 dc,
 		log:                log,
-		nextSegment:        make(chan nzb.NzbSegment),
+		nextSegment:        make(chan nzb.NzbSegment, 200),
 		wg:                 &sync.WaitGroup{},
 		currentDownloading: &sync.Map{},
 		filePath:           filePath,
@@ -213,53 +212,38 @@ func (b *buffer) read(p []byte, currentSegmentIndex, beginReadAt int) (int, erro
 	}
 
 	i := 0
-	timeout := time.NewTimer(10 * time.Second)
+	retries := 0
 	for {
-		select {
-		case <-timeout.C:
-			return n, io.ErrUnexpectedEOF
-		default:
-			if n >= len(p) {
-				if !timeout.Stop() {
-					<-timeout.C
-				}
-				b.ptr += int64(n)
+		if n >= len(p) {
+			b.ptr += int64(n)
 
-				nextSegment := int(float64(b.ptr) / float64(b.chunkSize))
-
-				if nextSegment > currentSegmentIndex {
-					err := b.segmentsBuffer.Delete(b.ctx, []byte(fmt.Sprint(currentSegmentIndex)))
-					if err != nil {
-						b.log.DebugContext(b.ctx, "Error deleting segment from cache:", "error", err, "segment", currentSegmentIndex)
-					}
-				}
-
-				return n, nil
-			}
-
-			segment, ok := b.segmentsBuffer.Load([]byte(fmt.Sprint(currentSegmentIndex + i)))
-			if !ok {
-				time.Sleep(1 * time.Millisecond)
-				continue
-			}
-			i++
-			chunk := segment
-
-			beginWriteAt := n
-			n += copy(p[beginWriteAt:], chunk[br:])
-			chunk = nil
-			br = 0
-
-			// Reset the timer since segment is present
-			if !timeout.Stop() {
-				<-timeout.C
-			}
-			timeout.Reset(10 * time.Second)
+			return n, nil
 		}
+
+		segment, ok := b.segmentsBuffer.Load([]byte(fmt.Sprint(currentSegmentIndex + i)))
+		if !ok {
+			retryTimeout := time.Duration(b.dc.maxDownloadRetries) * time.Second
+
+			if retries >= int(retryTimeout.Milliseconds()) {
+				b.log.ErrorContext(b.ctx, "Timeout waiting for chunk", "segment", currentSegmentIndex+i)
+				return n, io.ErrNoProgress
+			}
+			time.Sleep(1 * time.Millisecond)
+			retries++
+			continue
+		}
+		i++
+		chunk := segment
+
+		beginWriteAt := n
+		n += copy(p[beginWriteAt:], chunk[br:])
+		chunk = nil
+		br = 0
+		retries = 0
 	}
 }
 
-func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, groups []string, decoder yencDecoder) ([]byte, error) {
+func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, groups []string) ([]byte, error) {
 	chunk := make([]byte, segment.Bytes)
 	var conn connectionpool.Resource
 	retryErr := retry.Do(func() error {
@@ -288,18 +272,11 @@ func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, gr
 			}
 		}
 
-		body, err := nntpConn.Body(fmt.Sprintf("<%v>", segment.Id))
+		chunk, err = nntpConn.Body(fmt.Sprintf("<%v>", segment.Id))
 		if err != nil {
 			return fmt.Errorf("error getting body: %w", err)
 		}
 
-		defer decoder.Reset()
-		decoder.SetReader(bufio.NewReader(body))
-
-		chunk, err = io.ReadAll(decoder)
-		if err != nil {
-			return fmt.Errorf("error decoding the body: %w", err)
-		}
 		b.cp.Free(conn)
 		conn = nil
 
@@ -312,9 +289,23 @@ func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, gr
 			return nntpcli.IsRetryableError(err)
 		}),
 		retry.OnRetry(func(n uint, err error) {
-			b.log.DebugContext(ctx, "Retrying download", "error", err, "segment", segment.Id, "retry", n)
+			b.log.DebugContext(ctx,
+				"Retrying download",
+				"error", err,
+				"segment", segment.Id,
+				"retry", n,
+			)
 
 			if conn != nil {
+				b.log.DebugContext(ctx,
+					"Closing connection",
+					"error", err,
+					"segment", segment.Id,
+					"retry", n,
+					"error_connection_host", conn.Value().Provider().Host,
+					"error_connection_created_at", conn.CreationTime(),
+				)
+
 				b.cp.Close(conn)
 				conn = nil
 			}
@@ -338,6 +329,12 @@ func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, gr
 			return nil, err
 		}
 
+		b.log.DebugContext(ctx,
+			"All download retries exhausted",
+			"error", retryErr,
+			"segment", segment.Id,
+		)
+
 		return nil, errors.Join(ErrCorruptedNzb, err)
 	}
 
@@ -345,12 +342,6 @@ func (b *buffer) downloadSegment(ctx context.Context, segment nzb.NzbSegment, gr
 }
 
 func (b *buffer) downloadWorker(ctx context.Context, cNzb corruptednzbsmanager.CorruptedNzbsManager) {
-	decoder := rapidyenc.NewDecoder(defaultBufSize)
-	defer func() {
-		decoder.Reset()
-		decoder = nil
-	}()
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -364,7 +355,7 @@ func (b *buffer) downloadWorker(ctx context.Context, cNzb corruptednzbsmanager.C
 				continue
 			}
 
-			chunk, err := b.downloadSegment(ctx, segment, b.nzbGroups, decoder)
+			chunk, err := b.downloadSegment(ctx, segment, b.nzbGroups)
 			if err != nil && !errors.Is(err, context.Canceled) {
 				if errors.Is(err, ErrCorruptedNzb) {
 					b.log.Error("Marking file as corrupted:", "error", err, "fileName", b.filePath)
