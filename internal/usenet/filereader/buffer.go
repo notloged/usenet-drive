@@ -27,7 +27,6 @@ var (
 	ErrSeekTooFar    = errors.New("seek: too far")
 )
 
-const defaultBufSize = 4096
 const toMb = 1e+6
 
 type Buffer interface {
@@ -52,7 +51,6 @@ type buffer struct {
 	wg                 *sync.WaitGroup
 	currentDownloading *sync.Map
 	filePath           string
-	readTimeout        *time.Timer
 }
 
 // NewBuffer creates a new data volume based on a buffer
