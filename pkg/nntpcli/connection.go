@@ -69,6 +69,7 @@ func newConnection(netconn net.Conn, provider Provider) (Connection, error) {
 
 // Close this client.
 func (c *connection) Close() error {
+	c.sendCmd("QUIT", 205)
 	c.decoder.Reset()
 	c.decoder = nil
 
@@ -77,13 +78,11 @@ func (c *connection) Close() error {
 
 // Authenticate against an NNTP server using authinfo user/pass
 func (c *connection) Authenticate() (err error) {
-	id, err := c.conn.Cmd("AUTHINFO USER %s", c.provider.Username)
+	code, _, err := c.sendCmd(fmt.Sprintf("AUTHINFO USER %s", c.provider.Username), 381)
 	if err != nil {
 		return err
 	}
-	c.conn.StartResponse(id)
-	code, _, err := c.conn.ReadCodeLine(381)
-	c.conn.EndResponse(id)
+
 	switch code {
 	case 481, 482, 502:
 		//failed, out of sequence or command not available
@@ -97,14 +96,13 @@ func (c *connection) Authenticate() (err error) {
 	default:
 		return err
 	}
-	id, err = c.conn.Cmd("AUTHINFO PASS %s", c.provider.Password)
+
+	_, _, err = c.sendCmd(fmt.Sprintf("AUTHINFO PASS %s", c.provider.Password), 281)
 	if err != nil {
 		return err
 	}
-	c.conn.StartResponse(id)
-	_, _, err = c.conn.ReadCodeLine(281)
-	c.conn.EndResponse(id)
-	return err
+
+	return nil
 }
 
 func (c *connection) JoinGroup(group string) error {
@@ -112,14 +110,7 @@ func (c *connection) JoinGroup(group string) error {
 		return nil
 	}
 
-	id, err := c.conn.Cmd("GROUP %s", group)
-	if err != nil {
-		return err
-	}
-
-	c.conn.StartResponse(id)
-	_, _, err = c.conn.ReadCodeLine(211)
-	c.conn.EndResponse(id)
+	_, _, err := c.sendCmd(fmt.Sprintf("GROUP %s", group), 211)
 	if err != nil {
 		return err
 	}
@@ -137,17 +128,7 @@ func (c *connection) CurrentJoinedGroup() string {
 
 // Body gets the decoded body of an article
 func (c *connection) Body(msgId string) ([]byte, error) {
-	id, err := c.conn.Cmd("BODY %s", msgId)
-	// A bit of synchronization weirdness. If one of the cmd sends in a pipeline fail
-	// while another is waiting for a response, we want to signal that our response has
-	// been read anyway. This gives waiters in the pipeline the opportunity to wake up
-	// realize the connection is closed
-	c.conn.StartResponse(id)
-	defer c.conn.EndResponse(id)
-	if err != nil {
-		return nil, err
-	}
-	_, _, err = c.conn.ReadCodeLine(222)
+	_, _, err := c.sendCmd(fmt.Sprintf("BODY %s", msgId), 222)
 	if err != nil {
 		return nil, err
 	}
@@ -168,14 +149,7 @@ func (c *connection) Body(msgId string) ([]byte, error) {
 // The reader should contain the entire article, headers and body in
 // RFC822ish format.
 func (c *connection) Post(r io.Reader) error {
-	id, err := c.conn.Cmd("POST")
-	if err != nil {
-		return err
-	}
-	c.conn.StartResponse(id)
-	defer c.conn.EndResponse(id)
-
-	_, _, err = c.conn.ReadCodeLine(340)
+	_, _, err := c.sendCmd("POST", 340)
 	if err != nil {
 		return err
 	}
@@ -192,4 +166,14 @@ func (c *connection) Post(r io.Reader) error {
 
 func (c *connection) Provider() Provider {
 	return c.provider
+}
+
+func (c *connection) sendCmd(cmd string, expectCode int) (int, string, error) {
+	id, err := c.conn.Cmd(cmd)
+	if err != nil {
+		return 0, "", err
+	}
+	c.conn.StartResponse(id)
+	defer c.conn.EndResponse(id)
+	return c.conn.ReadCodeLine(expectCode)
 }
