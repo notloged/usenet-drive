@@ -69,11 +69,16 @@ func newConnection(netconn net.Conn, provider Provider) (Connection, error) {
 
 // Close this client.
 func (c *connection) Close() error {
-	c.sendCmd("QUIT", 205)
 	c.decoder.Reset()
 	c.decoder = nil
 
-	return c.conn.Close()
+	_, _, err := c.sendCmd("QUIT", 205)
+	e := c.conn.Close()
+	if err == nil {
+		return err
+	}
+
+	return e
 }
 
 // Authenticate against an NNTP server using authinfo user/pass
