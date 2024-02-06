@@ -259,6 +259,8 @@ func (b *buffer) read(p []byte, currentSegmentIndex, beginReadAt int) (int, erro
 					}
 
 					segment = chunk
+				} else {
+					return n, io.EOF
 				}
 			} else {
 				// Try not spamming
