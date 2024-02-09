@@ -58,8 +58,9 @@ func (s *webdavServer) Start(ctx context.Context, port string) {
 	srv := &http.Server{
 		Addr: addr,
 		// Good practice to set timeouts to avoid Slowloris attacks.
-		IdleTimeout: time.Second * 60,
-		Handler:     mux,
+		WriteTimeout: time.Minute * 5,
+		IdleTimeout:  time.Second * 60,
+		Handler:      mux,
 	}
 	s.log.InfoContext(ctx, fmt.Sprintf("WebDav server started at http://localhost:%v", port))
 	go func() {
