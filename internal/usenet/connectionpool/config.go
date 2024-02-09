@@ -9,20 +9,26 @@ import (
 )
 
 type Config struct {
-	downloadProviders []config.UsenetProvider
-	uploadProviders   []config.UsenetProvider
-	log               *slog.Logger
-	fakeConnections   bool
-	cli               nntpcli.Client
-	maxConnectionTTL  time.Duration
+	downloadProviders      []config.UsenetProvider
+	uploadProviders        []config.UsenetProvider
+	log                    *slog.Logger
+	fakeConnections        bool
+	cli                    nntpcli.Client
+	maxConnectionTTL       time.Duration
+	maxConnectionIdleTime  time.Duration
+	minDownloadConnections int
+	healthCheckInterval    time.Duration
 }
 
 type Option func(*Config)
 
 func defaultConfig() *Config {
 	return &Config{
-		fakeConnections:  false,
-		maxConnectionTTL: 10 * time.Minute,
+		fakeConnections:        false,
+		maxConnectionTTL:       60 * time.Minute,
+		maxConnectionIdleTime:  30 * time.Minute,
+		minDownloadConnections: 5,
+		healthCheckInterval:    time.Minute,
 	}
 }
 
@@ -59,5 +65,23 @@ func WithFakeConnections(fakeConnections bool) Option {
 func WithMaxConnectionTTL(maxConnectionTTL time.Duration) Option {
 	return func(c *Config) {
 		c.maxConnectionTTL = maxConnectionTTL
+	}
+}
+
+func WithMaxConnectionIdleTime(maxConnectionIdleTime time.Duration) Option {
+	return func(c *Config) {
+		c.maxConnectionIdleTime = maxConnectionIdleTime
+	}
+}
+
+func WithMinDownloadConnections(minDownloadConnections int) Option {
+	return func(c *Config) {
+		c.minDownloadConnections = minDownloadConnections
+	}
+}
+
+func WithHealthCheckInterval(healthCheckInterval time.Duration) Option {
+	return func(c *Config) {
+		c.healthCheckInterval = healthCheckInterval
 	}
 }
