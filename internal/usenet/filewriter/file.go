@@ -387,8 +387,8 @@ func (f *file) addSegment(ctx context.Context, conn connectionpool.Resource, seg
 		if conn == nil {
 			c, err := f.cp.GetUploadConnection(ctx)
 			if err != nil {
-				if conn != nil {
-					f.cp.Close(conn)
+				if c != nil {
+					f.cp.Close(c)
 					conn = nil
 				}
 
@@ -412,6 +412,12 @@ func (f *file) addSegment(ctx context.Context, conn connectionpool.Resource, seg
 		}
 
 		nntpConn := conn.Value()
+		if nntpConn == nil {
+			f.cp.Close(conn)
+			conn = nil
+
+			return fmt.Errorf("error getting the connection %w", ErrRetryable)
+		}
 		err = nntpConn.Post(articleReader)
 		if err != nil {
 			return fmt.Errorf("error posting article: %w", err)
