@@ -412,6 +412,12 @@ func (f *file) addSegment(ctx context.Context, conn connectionpool.Resource, seg
 		}
 
 		nntpConn := conn.Value()
+		if nntpConn == nil {
+			f.cp.Close(conn)
+			conn = nil
+
+			return fmt.Errorf("error getting the connection %w", ErrRetryable)
+		}
 		err = nntpConn.Post(articleReader)
 		if err != nil {
 			return fmt.Errorf("error posting article: %w", err)
