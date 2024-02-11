@@ -387,8 +387,8 @@ func (f *file) addSegment(ctx context.Context, conn connectionpool.Resource, seg
 		if conn == nil {
 			c, err := f.cp.GetUploadConnection(ctx)
 			if err != nil {
-				if conn != nil {
-					f.cp.Close(conn)
+				if c != nil {
+					f.cp.Close(c)
 					conn = nil
 				}
 
