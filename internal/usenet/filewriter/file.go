@@ -22,7 +22,6 @@ import (
 	"github.com/javi11/usenet-drive/pkg/nntpcli"
 	"github.com/javi11/usenet-drive/pkg/nzb"
 	"github.com/javi11/usenet-drive/pkg/osfs"
-	"github.com/mnightingale/rapidyenc"
 )
 
 var ErrUnexpectedFileSize = errors.New("file size does not match the expected size")
@@ -52,7 +51,6 @@ type file struct {
 	uploadErr        error
 	sr               status.StatusReporter
 	sessionId        uuid.UUID
-	encoder          *rapidyenc.Encoder
 }
 
 func openFile(
@@ -117,7 +115,6 @@ func openFile(
 		},
 		sessionId: sessionId,
 		sr:        sr,
-		encoder:   rapidyenc.NewEncoder(),
 	}, nil
 }
 
@@ -368,7 +365,7 @@ func (f *file) addSegment(ctx context.Context, conn connectionpool.Resource, seg
 			return fmt.Errorf("error building article data %w", ErrRetryable)
 		}
 
-		articleReader, err := ArticleToReader(b, a, f.encoder)
+		articleReader, err := ArticleToReader(b, a)
 		if err != nil {
 			log.Error("Error building article.", "error", err)
 			f.cp.Free(conn)
